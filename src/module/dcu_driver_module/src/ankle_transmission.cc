@@ -1,768 +1,240 @@
 // Copyright (c) 2023, AgiBot Inc.
 // All rights reserved.
-
 #include "dcu_driver_module/ankle_transmission.h"
 
-#include <iostream>
-
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <cstdio>
+#include <filesystem>
+#include <limits>
+#include <mutex>
+#include <stdexcept>
+#include <unordered_map>
+#include <utility>
+#include "dcu_driver_module/ankle_kinematics.h"
 #include "yaml-cpp/yaml.h"
 
-#define QM5_ANGLE_MAX 1
-#define QM5_ANGLE_MIN -1.4
-#define QM5_RESOLUTION_RATIO (0.4 / 180.0 * M_PI)
-#define QM5_ANGLE_NUM ((QM5_ANGLE_MAX - QM5_ANGLE_MIN) / QM5_RESOLUTION_RATIO)
-
-#define QM6_ANGLE_MAX 1.4
-#define QM6_ANGLE_MIN -1
-#define QM6_RESOLUTION_RATIO (0.4 / 180.0 * M_PI)
-#define QM6_ANGLE_NUM ((QM6_ANGLE_MAX - QM6_ANGLE_MIN) / QM6_RESOLUTION_RATIO)
-
-static constexpr double r = 25e-3;
-static constexpr double l = (50.0) / 2. * 1e-3;
-static constexpr double r_l = r / l;
-static constexpr double l_r = l / r;
-
-static constexpr double p_4p2_6_x = -0.041;
-static constexpr double p_4p4_6_x = -0.041;
-
-static constexpr double p_4p2_6_z = 0.009;
-static constexpr double p_4p4_6_z = 0.009;
-
-static constexpr double p_m5p1_m5_z = 0.025;
-static constexpr double p_m6p3_m6_z = 0.025;
-
-static constexpr double p_4m5_4_x = -0.041;
-static constexpr double p_4m6_4_x = -0.041;
-
-static constexpr double p_4m5_4_z = 0.195;
-static constexpr double p_4m6_4_z = 0.14;
-
-static constexpr double l_p1p2 = 0.195;
-static constexpr double l_p3p4 = 0.14;
-
 namespace xyber_x1_infer::dcu_driver_module {
+struct AnkleModel {
+  ankle::Geometry left, right;
+  ankle::Vec2 origin{};
+  double step{}, node_tolerance{}, inverse_motor_tolerance{}, interpolation_tolerance{}, roundtrip_tolerance{}, epsilon{};
+  std::size_t rows{}, columns{};
+  std::vector<ankle::Vec2> table;
+};
 
-std::unordered_map<std::string, std::vector<double>>
-    AnkleParallelTransmission::actuator_to_joint_data_;
+namespace {
+void Require(bool condition, const char* message) {
+  if (!condition) throw std::runtime_error(message);
+}
+bool Finite(const ankle::Vec2& value) {
+  return std::isfinite(value[0]) && std::isfinite(value[1]);
+}
+double Maximum(const ankle::Vec2& value) {
+  return std::max(std::abs(value[0]),std::abs(value[1]));
+}
+double Positive(const YAML::Node& node) {
+  const auto value=node.as<double>();
+  Require(std::isfinite(value) && value>0,"Invalid ankle numerical setting");
+  return value;
+}
+ankle::Geometry ParseGeometry(const YAML::Node& node) {
+  Require(node.IsSequence() && node.size()==2,"Expected long and short ankle branches");
+  std::array<double,22> packed{};
+  for (std::size_t k=0;k<2;++k) {
+    const auto motor=node[k]["motor_center"].as<std::vector<double>>();
+    const auto foot=node[k]["foot_attachment"].as<std::vector<double>>();
+    Require(motor.size()==3 && foot.size()==3,"Invalid ankle point coordinates");
+    auto* b=packed.data()+11*k;
+    std::copy(motor.begin(),motor.end(),b);
+    std::copy(foot.begin(),foot.end(),b+3);
+    b[6]=node[k]["radius"].as<double>();
+    b[7]=node[k]["rod_length"].as<double>();
+    b[8]=node[k]["zero_angle"].as<double>();
+    b[9]=node[k]["assembly_sign"].as<double>();
+    b[10]=node[k]["motor_direction"].as<double>();
+  }
+  return ankle::unpack(packed.data(),packed.size());
+}
+std::shared_ptr<const AnkleModel> LoadModel(const std::string& path) {
+  const auto config_path=std::filesystem::absolute(path).lexically_normal();
+  static std::mutex cache_mutex;
+  static std::unordered_map<std::string,std::weak_ptr<const AnkleModel>> cache;
+  std::lock_guard<std::mutex> lock(cache_mutex);
+  if (auto shared=cache[config_path.string()].lock()) return shared;
 
-AnkleParallelTransmission::AnkleParallelTransmission(std::string name, std::string path)
-    : Transmission(name) {
-  logger_ = aimrt::common::util::SimpleLogger();
-  if (actuator_to_joint_data_.empty()) {
-    AIMRT_HL_INFO(logger_, "actuator_to_joint_data_ loading.");
-    YAML::Node config = YAML::LoadFile(path);
-    std::vector<double> parse_vec;
-    auto iter = config.begin();
-    for (size_t i = 1; i <= QM5_ANGLE_NUM; i++) {
-      for (size_t j = 1; j <= QM6_ANGLE_NUM; j++) {
-        std::vector<double>().swap(parse_vec);
-        parse_vec.push_back((iter->second)["q5"].as<double>());
-        parse_vec.push_back((iter->second)["q6"].as<double>());
-        actuator_to_joint_data_.insert(std::make_pair(iter->first.as<std::string>(), parse_vec));
-        if (iter != config.end()) {
-          iter++;
-        }
-      }
-    }
+  const auto config=YAML::LoadFile(config_path.string());
+  Require(config["schema_version"].as<int>()==1,"Unsupported F1 ankle configuration schema");
+  auto model=std::make_shared<AnkleModel>();
+  model->left=ParseGeometry(config["left_geometry"]);
+  model->right=ParseGeometry(config["right_geometry"]);
+  const auto info=config["table"];
+  model->rows=info["rows"].as<std::size_t>();
+  model->columns=info["columns"].as<std::size_t>();
+  Require(model->rows>=2 && model->columns>=2 &&
+          model->rows<=std::numeric_limits<std::size_t>::max()/model->columns,
+          "Invalid ankle table dimensions");
+  const auto origin=info["motor_origin_rad"].as<std::vector<double>>();
+  Require(origin.size()==2,"Expected two ankle table origins");
+  model->origin={origin[0],origin[1]};
+  Require(Finite(model->origin),"Non-finite ankle table origin");
+  model->step=Positive(info["motor_step_rad"]);
+  model->node_tolerance=Positive(info["node_length_tolerance_m"]);
+  model->inverse_motor_tolerance=Positive(info["inverse_motor_tolerance_rad"]);
+  model->interpolation_tolerance=Positive(info["interpolated_length_tolerance_m"]);
+  model->roundtrip_tolerance=Positive(info["joint_roundtrip_tolerance_rad"]);
+  model->epsilon=Positive(info["coordinate_epsilon"]);
+  const auto count=model->rows*model->columns;
+  model->table.resize(count);
+  std::vector<bool> loaded(count,false);
+  const auto table_path=config_path.parent_path()/info["file"].as<std::string>();
+  const auto table=YAML::LoadFile(table_path.string());
+  Require(table.IsMap() && table.size()==count,"Incomplete ankle FK table");
+  for (const auto& entry:table) {
+    const auto key=entry.first.as<std::string>();
+    std::size_t i=0,j=0;
+    int consumed=0;
+    Require(std::sscanf(key.c_str(),"qm5qm6_%zu_%zu%n",&i,&j,&consumed)==2 &&
+            consumed==static_cast<int>(key.size()) && i>=1 && i<=model->rows &&
+            j>=1 && j<=model->columns,"Invalid ankle FK table key");
+    const auto index=(i-1)*model->columns+j-1;
+    Require(!loaded[index],"Duplicate ankle FK table key");
+    Require(entry.second.IsMap() && entry.second.size()==2,"Invalid ankle FK table value");
+    const ankle::Vec2 q{entry.second["q5"].as<double>(),entry.second["q6"].as<double>()};
+    Require(Finite(q),"Non-finite ankle FK table value");
+    const ankle::Vec2 m{model->origin[0]+(i-1)*model->step,
+                        model->origin[1]+(j-1)*model->step};
+    Require(Maximum(ankle::constraint_residual(model->right,q,m))<=model->node_tolerance,
+            "Ankle FK table does not match configured physical geometry");
+    const ankle::Vec2 left_q{q[0],-q[1]},left_m{-m[0],-m[1]};
+    Require(Maximum(ankle::constraint_residual(model->left,left_q,left_m))<=model->node_tolerance,
+            "Left/right mirror geometry does not match shared ankle FK table");
+    const auto right_back=ankle::inverse_position(model->right,q);
+    const auto left_back=ankle::inverse_position(model->left,left_q);
+    Require(Maximum({right_back[0]-m[0],right_back[1]-m[1]})<model->inverse_motor_tolerance &&
+            Maximum({left_back[0]-left_m[0],left_back[1]-left_m[1]})<model->inverse_motor_tolerance,
+            "Ankle FK table node does not match current IK assembly branch");
+    model->table[index]=q;
+    loaded[index]=true;
+  }
+  Require(std::all_of(loaded.begin(),loaded.end(),[](bool v){return v;}),"Missing ankle FK node");
+  cache[config_path.string()]=model;
+  return model;
+}
+
+ankle::Vec2 Lookup(const AnkleModel& model,const ankle::Vec2& raw_motor,bool left) {
+  Require(Finite(raw_motor),"Non-finite ankle motor feedback");
+  const ankle::Vec2 m=left?ankle::Vec2{-raw_motor[0],-raw_motor[1]}:raw_motor;
+  ankle::Vec2 u{(m[0]-model.origin[0])/model.step,(m[1]-model.origin[1])/model.step};
+  const std::array<std::size_t,2> shape{model.rows,model.columns};
+  std::array<std::size_t,2> base{};
+  ankle::Vec2 fraction{};
+  for (std::size_t k=0;k<2;++k) {
+    const double last=static_cast<double>(shape[k]-1);
+    Require(std::isfinite(u[k]) && u[k]>=-model.epsilon && u[k]<=last+model.epsilon,
+            "Ankle motor angle outside FK table node range");
+    u[k]=std::clamp(u[k],0.0,last); // Only roundoff at an already-checked endpoint.
+    base[k]=std::min(static_cast<std::size_t>(std::floor(u[k])),shape[k]-2);
+    fraction[k]=u[k]-base[k];
+  }
+  const auto i=base[0],j=base[1];
+  const std::array<std::size_t,4> indices{i*model.columns+j,(i+1)*model.columns+j,
+                                        i*model.columns+j+1,(i+1)*model.columns+j+1};
+  const auto a=fraction[0],b=fraction[1];
+  const std::array<double,4> weights{(1-a)*(1-b),a*(1-b),(1-a)*b,a*b};
+  ankle::Vec2 q{};
+  for (std::size_t k=0;k<4;++k) {
+    q[0]+=weights[k]*model.table[indices[k]][0];
+    q[1]+=weights[k]*model.table[indices[k]][1];
+  }
+  Require(Finite(q) && Maximum(ankle::constraint_residual(model.right,q,m))<=model.interpolation_tolerance,
+          "Ankle interpolated FK violates the rod constraints");
+  if (left) q[1]=-q[1];
+  return q;
+}
+ankle::Vec2 MotorPosition(const ActuatorHandle& m5,const ActuatorHandle& m6) {
+  return {m5.handle->state.position*m5.direction,m6.handle->state.position*m6.direction};
+}
+void CheckHandle(const ActuatorHandle& motor) {
+  Require(motor.handle && (motor.direction==1 || motor.direction==-1),"Invalid ankle actuator binding/direction");
+}
+}  // namespace
+
+AnkleParallelTransmission::AnkleParallelTransmission(
+    std::string name,std::string path,bool is_left,ActuatorHandle motor5,ActuatorHandle motor6,
+    JointHandle joint_pitch,JointHandle joint_roll)
+    : Transmission(std::move(name)),model_(LoadModel(path)),is_left_(is_left),
+      motor5_(motor5),motor6_(motor6),joint_pitch_(joint_pitch),joint_roll_(joint_roll) {
+  CheckHandle(motor5_);
+  CheckHandle(motor6_);
+  Require(motor5_.handle!=motor6_.handle && joint_pitch_.handle && joint_roll_.handle &&
+          joint_pitch_.handle!=joint_roll_.handle,"Invalid ankle joint/actuator binding");
+}
+
+void AnkleParallelTransmission::TransformActuatorToJoint() {
+  const auto m=MotorPosition(motor5_,motor6_);
+  const auto q=Lookup(*model_,m,is_left_);
+  const auto& geometry=is_left_?model_->left:model_->right;
+  const auto j=ankle::jacobian(geometry,q,m);
+  const ankle::Vec2 motor_velocity{motor5_.handle->state.velocity*motor5_.direction,
+                                   motor6_.handle->state.velocity*motor6_.direction};
+  // Hardware feedback effort units are intentionally unchanged in this patch.
+  const ankle::Vec2 motor_effort{motor5_.handle->state.effort*motor5_.direction,
+                                 motor6_.handle->state.effort*motor6_.direction};
+  Require(Finite(motor_velocity) && Finite(motor_effort),"Non-finite ankle velocity/effort feedback");
+  const auto velocity=ankle::motor_to_joint_velocity(j,motor_velocity);
+  const auto effort=ankle::motor_to_joint_torque(j,motor_effort);
+  Require(Finite(velocity) && Finite(effort),"Non-finite ankle joint feedback");
+  // Commit the complete pair after all calculations succeed.
+  joint_pitch_.handle->state.position=q[0];
+  joint_roll_.handle->state.position=q[1];
+  joint_pitch_.handle->state.velocity=velocity[0];
+  joint_roll_.handle->state.velocity=velocity[1];
+  joint_pitch_.handle->state.effort=effort[0];
+  joint_roll_.handle->state.effort=effort[1];
+}
+
+void AnkleParallelTransmission::TransformJointToActuator() {
+  const auto& geometry=is_left_?model_->left:model_->right;
+  const ankle::Vec2 desired_q{joint_pitch_.handle->cmd.position,joint_roll_.handle->cmd.position};
+  const ankle::Vec2 desired_velocity{joint_pitch_.handle->cmd.velocity,joint_roll_.handle->cmd.velocity};
+  const ankle::Vec2 desired_effort{joint_pitch_.handle->cmd.effort,joint_roll_.handle->cmd.effort};
+  const ankle::Vec2 kp{joint_pitch_.handle->cmd.kp,joint_roll_.handle->cmd.kp};
+  const ankle::Vec2 kd{joint_pitch_.handle->cmd.kd,joint_roll_.handle->cmd.kd};
+  Require(Finite(desired_q) && Finite(desired_velocity) && Finite(desired_effort) && Finite(kp) && Finite(kd),
+          "Non-finite ankle command");
+  Require(kp[0]>=0 && kp[1]>=0 && kd[0]>=0 && kd[1]>=0,"Negative ankle MIT gain");
+  const auto desired_m=ankle::inverse_position(geometry,desired_q);
+  const auto recovered=Lookup(*model_,desired_m,is_left_);
+  Require(Maximum({recovered[0]-desired_q[0],recovered[1]-desired_q[1]})<=model_->roundtrip_tolerance,
+          "Ankle target is outside supported FK/IK assembly branch");
+  // Use the same measured motor snapshot and its FK pose for the Jacobian.
+  const auto measured_m=MotorPosition(motor5_,motor6_);
+  const auto measured_q=Lookup(*model_,measured_m,is_left_);
+  const auto j=ankle::jacobian(geometry,measured_q,measured_m);
+  const auto velocity=ankle::joint_to_motor_velocity(j,desired_velocity);
+  const auto effort=ankle::joint_to_motor_torque(j,desired_effort);
+  Require(Finite(desired_m) && Finite(velocity) && Finite(effort),"Non-finite ankle motor command");
+  const std::array<ActuatorHandle,2> motors{motor5_,motor6_};
+  for (std::size_t k=0;k<2;++k) {
+    auto& cmd=motors[k].handle->cmd;
+    cmd.position=desired_m[k]*motors[k].direction;
+    cmd.velocity=velocity[k]*motors[k].direction;
+    cmd.effort=effort[k]*motors[k].direction;
+    // Retain the existing gain pass-through convention; RL sets both to zero.
+    cmd.kp=kp[k];
+    cmd.kd=kd[k];
   }
 }
 
 LeftAnkleParallelTransmission::LeftAnkleParallelTransmission(
-    std::string name, std::string param_path, ActuatorHandle actr_left, ActuatorHandle actr_right,
-    JointHandle joint_pitch, JointHandle joint_roll)
-    : AnkleParallelTransmission(name, param_path),
-      actr_left_(actr_left),
-      actr_right_(actr_right),
-      joint_roll_(joint_roll),
-      joint_pitch_(joint_pitch) {}
-
-void LeftAnkleParallelTransmission::TransformActuatorToJoint() {
-  // pos
-  double qm5 = actr_right_.handle->state.position * actr_right_.direction;
-  double qm6 = actr_left_.handle->state.position * actr_left_.direction;
-  qm5 *= -1;
-  qm6 *= -1;
-
-  int qm5_num_int = (int)((qm5 - QM5_ANGLE_MIN) / QM5_RESOLUTION_RATIO);
-  int qm6_num_int = (int)((qm6 - QM6_ANGLE_MIN) / QM6_RESOLUTION_RATIO);
-
-  double qmLss_5_num_double = (double)((qm5 - QM5_ANGLE_MIN) / QM5_RESOLUTION_RATIO);
-  double qmLss_6_num_double = (double)((qm6 - QM6_ANGLE_MIN) / QM6_RESOLUTION_RATIO);
-
-  if (qm5_num_int < 0) {
-    std::cout << "qm5_num_int is error" << std::endl;
-  }
-
-  if (qm6_num_int < 0) {
-    std::cout << "qm6_num_int is error" << std::endl;
-  }
-
-  std::string param1 = "qm5qm6_" + std::to_string(qm5_num_int + 1);
-  param1 += "_" + std::to_string(qm6_num_int + 1);
-
-  std::string param2 = "qm5qm6_" + std::to_string(qm5_num_int + 2);
-  param2 += "_" + std::to_string(qm6_num_int + 2);
-
-  auto iter1 = actuator_to_joint_data_.find(param1);
-  auto iter2 = actuator_to_joint_data_.find(param2);
-
-  double qm5_lerp = qmLss_5_num_double - qm5_num_int;
-  double qm6_lerp = qmLss_6_num_double - qm6_num_int;
-  double lerp = std::sqrt((pow(qm5_lerp, 2) + pow(qm6_lerp, 2)) / 2);
-
-  double q5 = 0;
-  double q6 = 0;
-
-  if (iter1 != actuator_to_joint_data_.end() && iter2 != actuator_to_joint_data_.end()) {
-    lerp = std::clamp(lerp, 0.0, 1.0);
-
-    q5 =
-        qm5_lerp * (actuator_to_joint_data_[param2].at(0) - actuator_to_joint_data_[param1].at(0)) +
-        actuator_to_joint_data_[param1].at(0);
-    q6 =
-        qm6_lerp * (actuator_to_joint_data_[param2].at(1) - actuator_to_joint_data_[param1].at(1)) +
-        actuator_to_joint_data_[param1].at(1);
-  } else {
-    std::cout << "actuator_to_joint_data_ out of range" << std::endl;
-  }
-
-  q6 *= -1;
-  qm5 *= -1;
-  qm6 *= -1;
-
-  // torque
-  double taum5 = actr_right_.handle->state.effort * actr_right_.direction;
-  double taum6 = actr_left_.handle->state.velocity * actr_left_.direction;
-
-  double cq5 = cos(q5);
-  double sq5 = sin(q5);
-  double cq6 = cos(q6);
-  double sq6 = sin(q6);
-  double cqm5 = 0;
-  double sqm5 = 0;
-  double cqm6 = 0;
-  double sqm6 = 0;
-
-  cqm5 = cos(qm5 + 1.2028);
-  sqm5 = sin(qm5 + 1.2028);
-  cqm6 = cos(qm6 - 1.2030);
-  sqm6 = sin(qm6 - 1.2030);
-  p_4p2_6_y = -0.025;
-  p_4p4_6_y = 0.025;
-
-  double delta14a = 9 * sq6 / 1000;
-  double delta13a = 41 * sq5 / 1000;
-  double delta12a = 9 * cq5 * cq6;
-  double delta11a = 41 * cq5 / 1000;
-  double delta10a = 9 * cq6 * sq5;
-  double delta9a = sqm5 / 40 - delta14a + p_4p2_6_y * cq6;
-  double delta8a =
-      delta13a - cqm5 / 40 + delta12a / 1000 + p_4p2_6_y * cq5 * sq6 - double(39) / 200;
-  double delta7a = delta10a / 1000 - delta11a + p_4p4_6_y * sq5 * sq6 + double(41) / 1000;
-  double delta6a = delta13a - cqm6 / 40 + delta12a / 1000 + p_4p4_6_y * cq5 * sq6 - double(7) / 50;
-  double delta5a =
-      sqrt(pow(delta10a / 1000 - delta11a + p_4p2_6_y * sq5 * sq6 + double(41) / 1000, 2) +
-           pow(delta8a, 2) + pow(delta9a, 2));
-  double delta4a =
-      1000 * (40 * sqm6 * delta8a / delta5a + 40 * cqm6 * delta9a / delta5a) *
-      sqrt(pow(delta7a, 2) + pow(delta6a, 2) + pow(sqm6 / 40 - delta14a + p_4p4_6_y * cq6, 2));
-  double delta3a = 1;
-  double delta2a = 1600;
-  double delta1a = 25 * (25 * cqm5 * sqm5 - 9 * cqm5 * sq6 - 195 * sqm5 - 25 * sqm5 * cqm5 +
-                         41 * sqm5 * sq5 + 9 * sqm5 * cq5 * cq6 + 1000 * p_4p2_6_y * cqm5 * cq6 +
-                         1000 * p_4p2_6_y * sqm5 * cq5 * sq6);
-
-  double f1a =
-      -(41 * sq5 * delta3a * (delta10a - 41 * cq5 + 1000 * p_4p2_6_y * sq5 * sq6 + 41)) / delta1a -
-      (41 * cq5 * delta3a *
-       (41 * sq5 - 25 * cqm5 + delta12a + 1000 * p_4p2_6_y * cq5 * sq6 - 195)) /
-          delta1a;
-  double f1b = -(41 * sq5 * delta2a * delta7a) / delta4a - (41 * cq5 * delta2a * delta6a) / delta4a;
-
-  double delta14b = 9 * sq6 / 1000;
-  double delta13b = 41 * sq5 / 1000;
-  double delta12b = 9 * cq5 * cq6 / 1000;
-  double delta11b = 41 * cq5 / 1000;
-  double delta10b = 9 * cq6 * sq5 / 1000;
-  double delta9b = sqm6 / 40 - delta14b + p_4p4_6_y * cq6;
-  double delta8b = sqm5 / 40 - delta14b + p_4p2_6_y * cq6;
-  double delta7b = delta13b - cqm5 / 40 + delta12b + p_4p2_6_y * cq5 * sq6 - double(39) / 200;
-  double delta6b =
-      sqrt(pow(delta10b - delta11b + p_4p4_6_y * sq5 * sq6 + double(41) / 1000, 2) +
-           pow(delta13b - cqm6 / 40 + delta12b + p_4p4_6_y * cq5 * sq6 - double(7) / 50, 2) +
-           pow(delta9b, 2));
-  double delta5b = sqrt(pow(delta10b - delta11b + p_4p2_6_y * sq5 * sq6 + double(41) / 1000, 2) +
-                        pow(delta7b, 2) + pow(delta8b, 2));
-  double delta3b = 1;
-  double delta2b = 1;
-  double delta1b =
-      (25 * cqm5 * sqm5 - 9 * cqm5 * sq6 - 195 * sqm5 - 25 * sqm5 * cqm5 + 41 * sqm5 * sq5 +
-       9 * sqm5 * cq5 * cq6 + 1000 * p_4p2_6_y * cqm5 * cq6 + 1000 * p_4p2_6_y * sqm5 * cq5 * sq6);
-
-  double f2a = sq6 * delta2b * (25 * sqm5 - 9 * sq6 + 1000 * p_4p2_6_y * cq6) / delta1b -
-               cq6 * delta2b *
-                   (9 * cq6 - 195 * cq5 + 41 * sq5 - 25 * cq5 * cqm5 + 1000 * p_4p2_6_y * sq6) /
-                   delta1b;
-  double f2b =
-      -sq6 * delta3b * delta9b * delta5b / ((sqm6 * delta7b + cqm6 * delta8b) * delta6b) +
-      cq6 * delta3b * delta5b *
-          (9 * cq6 - 140 * cq5 + 41 * sq5 - 25 * cq5 * cqm6 + 1000 * p_4p4_6_y * sq6) /
-          (delta6b * (25 * cqm6 * sqm5 - 9 * cqm6 * sq6 - 195 * sqm6 - 25 * sqm6 * cqm5 +
-                      41 * sqm6 * sq5 + 9 * sqm6 * cq5 * cq6 + 1000 * p_4p2_6_y * cqm6 * cq6 +
-                      1000 * p_4p2_6_y * sqm6 * cq5 * sq6));
-
-  f2a *= -1;
-  f2b *= -1;
-
-  double tauj5 = f1a * taum5 + f1b * taum6;
-  double tauj6 = f2a * taum5 + f2b * taum6;
-
-  // vel
-  double qdm5 = actr_right_.handle->state.velocity * actr_right_.direction;
-  double qdm6 = actr_left_.handle->state.velocity * actr_left_.direction;
-
-  double det11 = f2b / (f2b * f1a - f1b * f2a);
-  double det12 = -f1b / (f2b * f1a - f1b * f2a);
-  double det21 = f2a / (f2a * f1b - f1a * f2b);
-  double det22 = -f1a / (f2a * f1b - f1a * f2b);
-
-  Eigen::Matrix<double, 2, 2> J_T;
-  J_T << det11, det12, det21, det22;
-
-  Eigen::Matrix<double, 2, 1> qdm56;
-  qdm56 << qdm5, qdm6;
-  Eigen::Matrix<double, 2, 1> qd56;
-  qd56 = J_T.transpose() * qdm56;
-
-  double qd5 = qd56[0];
-  double qd6 = qd56[1];
-
-  joint_pitch_.handle->state.position = q5;
-  joint_pitch_.handle->state.velocity = qd5;
-  joint_pitch_.handle->state.effort = tauj5;
-
-  joint_roll_.handle->state.position = q6;
-  joint_roll_.handle->state.velocity = qd6;
-  joint_roll_.handle->state.effort = tauj6;
-}
-
-void LeftAnkleParallelTransmission::TransformJointToActuator() {
-  // pos
-  double q5Des = joint_pitch_.handle->cmd.position;
-  double q6Des = joint_roll_.handle->cmd.position;
-
-  p_4p2_6_y = -0.025;
-  p_4p4_6_y = 0.025;
-
-  double delta11 = -pow(l_p1p2, 2) +
-                   pow((p_4p2_6_x * cos(q5Des) - p_4m5_4_x + p_4p2_6_z * cos(q6Des) * sin(q5Des) +
-                        p_4p2_6_y * sin(q5Des) * sin(q6Des)),
-                       2);
-  double delta12 = p_4m5_4_z + p_4p2_6_x * sin(q5Des) - p_4p2_6_z * cos(q5Des) * cos(q6Des) -
-                   p_4p2_6_y * cos(q5Des) * sin(q6Des);
-  double delta13 = p_4p2_6_y * cos(q6Des) - p_4p2_6_z * sin(q6Des);
-
-  double a1 = 2 * delta13 * p_m5p1_m5_z;
-  double b1 = 2 * delta12 * p_m5p1_m5_z;
-  double c1 = -(delta11 + pow(delta12, 2) + pow(delta13, 2) + pow(p_m5p1_m5_z, 2));
-
-  double delta21 = -pow(l_p3p4, 2) +
-                   pow((p_4p4_6_x * cos(q5Des) - p_4m6_4_x + p_4p4_6_z * cos(q6Des) * sin(q5Des) +
-                        p_4p4_6_y * sin(q5Des) * sin(q6Des)),
-                       2);
-  double delta22 = p_4m6_4_z + p_4p4_6_x * sin(q5Des) - p_4p4_6_z * cos(q5Des) * cos(q6Des) -
-                   p_4p4_6_y * cos(q5Des) * sin(q6Des);
-  double delta23 = p_4p4_6_y * cos(q6Des) - p_4p4_6_z * sin(q6Des);
-
-  double a2 = 2 * delta23 * p_m6p3_m6_z;
-  double b2 = 2 * delta22 * p_m6p3_m6_z;
-  double c2 = -(delta21 + pow(delta22, 2) + pow(delta23, 2) + pow(p_m6p3_m6_z, 2));
-
-  double qm5Des = 0;
-  double qm6Des = 0;
-
-  qm5Des = acos(c1 / sqrt(pow(a1, 2) + pow(b1, 2))) + atan(a1 / b1) - 1.2028;
-  qm6Des = -acos(c2 / sqrt(pow(a2, 2) + pow(b2, 2))) + atan(a2 / b2) + 1.2030;
-
-  // torque
-  double q5 = joint_pitch_.handle->state.position;
-  double q6 = joint_roll_.handle->state.position;
-
-  double qm5 = actr_right_.handle->state.position * actr_right_.direction;
-  double qm6 = actr_left_.handle->state.position * actr_left_.direction;
-
-  double tau5Des = joint_pitch_.handle->cmd.effort;
-  double tau6Des = joint_roll_.handle->cmd.effort;
-
-  double cq5 = cos(q5);
-  double sq5 = sin(q5);
-  double cq6 = cos(q6);
-  double sq6 = sin(q6);
-  double cqm5 = 0;
-  double sqm5 = 0;
-  double cqm6 = 0;
-  double sqm6 = 0;
-
-  cqm5 = cos(qm5 + 1.2028);
-  sqm5 = sin(qm5 + 1.2028);
-  cqm6 = cos(qm6 - 1.2030);
-  sqm6 = sin(qm6 - 1.2030);
-  p_4p2_6_y = -0.025;
-  p_4p4_6_y = 0.025;
-
-  double delta14a = 9 * sq6 / 1000;
-  double delta13a = 41 * sq5 / 1000;
-  double delta12a = 9 * cq5 * cq6;
-  double delta11a = 41 * cq5 / 1000;
-  double delta10a = 9 * cq6 * sq5;
-  double delta9a = sqm5 / 40 - delta14a + p_4p2_6_y * cq6;
-  double delta8a =
-      delta13a - cqm5 / 40 + delta12a / 1000 + p_4p2_6_y * cq5 * sq6 - double(39) / 200;
-  double delta7a = delta10a / 1000 - delta11a + p_4p4_6_y * sq5 * sq6 + double(41) / 1000;
-  double delta6a = delta13a - cqm6 / 40 + delta12a / 1000 + p_4p4_6_y * cq5 * sq6 - double(7) / 50;
-  double delta5a =
-      sqrt(pow(delta10a / 1000 - delta11a + p_4p2_6_y * sq5 * sq6 + double(41) / 1000, 2) +
-           pow(delta8a, 2) + pow(delta9a, 2));
-  double delta4a =
-      1000 * (40 * sqm6 * delta8a / delta5a + 40 * cqm6 * delta9a / delta5a) *
-      sqrt(pow(delta7a, 2) + pow(delta6a, 2) + pow(sqm6 / 40 - delta14a + p_4p4_6_y * cq6, 2));
-  double delta3a = 1;
-  double delta2a = 1600;
-  double delta1a = 25 * (25 * cqm5 * sqm5 - 9 * cqm5 * sq6 - 195 * sqm5 - 25 * sqm5 * cqm5 +
-                         41 * sqm5 * sq5 + 9 * sqm5 * cq5 * cq6 + 1000 * p_4p2_6_y * cqm5 * cq6 +
-                         1000 * p_4p2_6_y * sqm5 * cq5 * sq6);
-
-  double f1a =
-      -(41 * sq5 * delta3a * (delta10a - 41 * cq5 + 1000 * p_4p2_6_y * sq5 * sq6 + 41)) / delta1a -
-      (41 * cq5 * delta3a *
-       (41 * sq5 - 25 * cqm5 + delta12a + 1000 * p_4p2_6_y * cq5 * sq6 - 195)) /
-          delta1a;
-  double f1b = -(41 * sq5 * delta2a * delta7a) / delta4a - (41 * cq5 * delta2a * delta6a) / delta4a;
-
-  double delta14b = 9 * sq6 / 1000;
-  double delta13b = 41 * sq5 / 1000;
-  double delta12b = 9 * cq5 * cq6 / 1000;
-  double delta11b = 41 * cq5 / 1000;
-  double delta10b = 9 * cq6 * sq5 / 1000;
-  double delta9b = sqm6 / 40 - delta14b + p_4p4_6_y * cq6;
-  double delta8b = sqm5 / 40 - delta14b + p_4p2_6_y * cq6;
-  double delta7b = delta13b - cqm5 / 40 + delta12b + p_4p2_6_y * cq5 * sq6 - double(39) / 200;
-  double delta6b =
-      sqrt(pow(delta10b - delta11b + p_4p4_6_y * sq5 * sq6 + double(41) / 1000, 2) +
-           pow(delta13b - cqm6 / 40 + delta12b + p_4p4_6_y * cq5 * sq6 - double(7) / 50, 2) +
-           pow(delta9b, 2));
-  double delta5b = sqrt(pow(delta10b - delta11b + p_4p2_6_y * sq5 * sq6 + double(41) / 1000, 2) +
-                        pow(delta7b, 2) + pow(delta8b, 2));
-  double delta3b = 1;
-  double delta2b = 1;
-  double delta1b =
-      (25 * cqm5 * sqm5 - 9 * cqm5 * sq6 - 195 * sqm5 - 25 * sqm5 * cqm5 + 41 * sqm5 * sq5 +
-       9 * sqm5 * cq5 * cq6 + 1000 * p_4p2_6_y * cqm5 * cq6 + 1000 * p_4p2_6_y * sqm5 * cq5 * sq6);
-
-  double f2a = sq6 * delta2b * (25 * sqm5 - 9 * sq6 + 1000 * p_4p2_6_y * cq6) / delta1b -
-               cq6 * delta2b *
-                   (9 * cq6 - 195 * cq5 + 41 * sq5 - 25 * cq5 * cqm5 + 1000 * p_4p2_6_y * sq6) /
-                   delta1b;
-  double f2b =
-      -sq6 * delta3b * delta9b * delta5b / ((sqm6 * delta7b + cqm6 * delta8b) * delta6b) +
-      cq6 * delta3b * delta5b *
-          (9 * cq6 - 140 * cq5 + 41 * sq5 - 25 * cq5 * cqm6 + 1000 * p_4p4_6_y * sq6) /
-          (delta6b * (25 * cqm6 * sqm5 - 9 * cqm6 * sq6 - 195 * sqm6 - 25 * sqm6 * cqm5 +
-                      41 * sqm6 * sq5 + 9 * sqm6 * cq5 * cq6 + 1000 * p_4p2_6_y * cqm6 * cq6 +
-                      1000 * p_4p2_6_y * sqm6 * cq5 * sq6));
-
-  f2a *= -1;
-  f2b *= -1;
-
-  double taum5Des = (f2b * tau5Des - f1b * tau6Des) / (f2b * f1a - f1b * f2a);
-  double taum6Des = (f2a * tau5Des - f1a * tau6Des) / (f2a * f1b - f1a * f2b);
-
-  // vel
-  double qd5_cmd = joint_pitch_.handle->cmd.velocity;
-  double qd6_cmd = joint_roll_.handle->cmd.velocity;
-  double qdm5_cmd = 0;
-  double qdm6_cmd = 0;
-
-  // vel
-  double qd5Des = joint_pitch_.handle->cmd.velocity;
-  double qd6Des = joint_roll_.handle->cmd.velocity;
-
-  double det11 = f2b / (f2b * f1a - f1b * f2a);
-  double det12 = -f1b / (f2b * f1a - f1b * f2a);
-  double det21 = f2a / (f2a * f1b - f1a * f2b);
-  double det22 = -f1a / (f2a * f1b - f1a * f2b);
-
-  Eigen::Matrix<double, 2, 2> J_T;
-  J_T << det11, det12, det21, det22;
-  Eigen::Matrix<double, 2, 2> J;
-  J = J_T.transpose();
-
-  Eigen::Matrix<double, 2, 1> qd56Des;
-  qd56Des << qd5Des, qd6Des;
-  // double determinant = J_T.determinant();
-
-  // // 检查行列式是否为零
-  // if (determinant == 0) {
-  //     std::cerr << "Error: Matrix is singular and cannot be inverted." << std::endl;
-  //     return -1;
-  // }
-  Eigen::Matrix<double, 2, 1> qdm56Des;
-  qdm56Des = J.inverse() * qd56Des;
-
-  double qdm5Des = qdm56Des[0];
-  double qdm6Des = qdm56Des[1];
-
-  actr_right_.handle->cmd.position = qm5Des * actr_right_.direction;
-  actr_right_.handle->cmd.velocity = qdm5Des * actr_right_.direction;
-  actr_right_.handle->cmd.effort = taum5Des * actr_right_.direction;
-  actr_right_.handle->cmd.kp = joint_pitch_.handle->cmd.kp;
-  actr_right_.handle->cmd.kd = joint_pitch_.handle->cmd.kd;
-
-  actr_left_.handle->cmd.position = qm6Des * actr_left_.direction;
-  actr_left_.handle->cmd.velocity = qdm6Des * actr_left_.direction;
-  actr_left_.handle->cmd.effort = taum6Des * actr_left_.direction;
-  actr_left_.handle->cmd.kp = joint_roll_.handle->cmd.kp;
-  actr_left_.handle->cmd.kd = joint_roll_.handle->cmd.kd;
-}
+    std::string name,std::string path,ActuatorHandle actr_left,ActuatorHandle actr_right,
+    JointHandle joint_pitch,JointHandle joint_roll)
+    : AnkleParallelTransmission(std::move(name),std::move(path),true,actr_right,actr_left,joint_pitch,joint_roll) {}
 
 RightAnkleParallelTransmission::RightAnkleParallelTransmission(
-    std::string name, std::string param_path, ActuatorHandle actr_left, ActuatorHandle actr_right,
-    JointHandle joint_pitch, JointHandle joint_roll)
-    : AnkleParallelTransmission(name, param_path),
-      actr_left_(actr_left),
-      actr_right_(actr_right),
-      joint_roll_(joint_roll),
-      joint_pitch_(joint_pitch) {}
-
-void RightAnkleParallelTransmission::TransformActuatorToJoint() {
-  // pos
-  double qm5 = actr_left_.handle->state.position * actr_left_.direction;
-  double qm6 = actr_right_.handle->state.position * actr_right_.direction;
-
-  int qm5_num_int = (int)((qm5 - QM5_ANGLE_MIN) / QM5_RESOLUTION_RATIO);
-  int qm6_num_int = (int)((qm6 - QM6_ANGLE_MIN) / QM6_RESOLUTION_RATIO);
-
-  double qmLss_5_num_double = (double)((qm5 - QM5_ANGLE_MIN) / QM5_RESOLUTION_RATIO);
-  double qmLss_6_num_double = (double)((qm6 - QM6_ANGLE_MIN) / QM6_RESOLUTION_RATIO);
-
-  if (qm5_num_int < 0) {
-    std::cout << "qm5_num_int is error" << std::endl;
-  }
-
-  if (qm6_num_int < 0) {
-    std::cout << "qm6_num_int is error" << std::endl;
-  }
-
-  std::string param1 = "qm5qm6_" + std::to_string(qm5_num_int + 1);
-  param1 += "_" + std::to_string(qm6_num_int + 1);
-
-  std::string param2 = "qm5qm6_" + std::to_string(qm5_num_int + 2);
-  param2 += "_" + std::to_string(qm6_num_int + 2);
-
-  auto iter1 = actuator_to_joint_data_.find(param1);
-  auto iter2 = actuator_to_joint_data_.find(param2);
-
-  double qm5_lerp = qmLss_5_num_double - qm5_num_int;
-  double qm6_lerp = qmLss_6_num_double - qm6_num_int;
-  double lerp = std::sqrt((pow(qm5_lerp, 2) + pow(qm6_lerp, 2)) / 2);
-
-  double q5 = 0;
-  double q6 = 0;
-
-  if (iter1 != actuator_to_joint_data_.end() && iter2 != actuator_to_joint_data_.end()) {
-    lerp = std::clamp(lerp, 0.0, 1.0);
-
-    q5 =
-        qm5_lerp * (actuator_to_joint_data_[param2].at(0) - actuator_to_joint_data_[param1].at(0)) +
-        actuator_to_joint_data_[param1].at(0);
-    q6 =
-        qm6_lerp * (actuator_to_joint_data_[param2].at(1) - actuator_to_joint_data_[param1].at(1)) +
-        actuator_to_joint_data_[param1].at(1);
-  } else {
-    std::cout << "actuator_to_joint_data_ out of range" << std::endl;
-  }
-
-  // torque
-  double taum5 = actr_left_.handle->state.effort * actr_left_.direction;
-  double taum6 = actr_right_.handle->state.effort * actr_right_.direction;
-
-  double cq5 = cos(q5);
-  double sq5 = sin(q5);
-  double cq6 = cos(q6);
-  double sq6 = sin(q6);
-  double cqm5 = 0;
-  double sqm5 = 0;
-  double cqm6 = 0;
-  double sqm6 = 0;
-
-  cqm5 = cos(qm5 - 1.2028);
-  sqm5 = sin(qm5 - 1.2028);
-  cqm6 = cos(qm6 + 1.2030);
-  sqm6 = sin(qm6 + 1.2030);
-  p_4p2_6_y = 0.025;
-  p_4p4_6_y = -0.025;
-
-  double delta14a = 9 * sq6 / 1000;
-  double delta13a = 41 * sq5 / 1000;
-  double delta12a = 9 * cq5 * cq6;
-  double delta11a = 41 * cq5 / 1000;
-  double delta10a = 9 * cq6 * sq5;
-  double delta9a = sqm5 / 40 - delta14a + p_4p2_6_y * cq6;
-  double delta8a =
-      delta13a - cqm5 / 40 + delta12a / 1000 + p_4p2_6_y * cq5 * sq6 - double(39) / 200;
-  double delta7a = delta10a / 1000 - delta11a + p_4p4_6_y * sq5 * sq6 + double(41) / 1000;
-  double delta6a = delta13a - cqm6 / 40 + delta12a / 1000 + p_4p4_6_y * cq5 * sq6 - double(7) / 50;
-  double delta5a =
-      sqrt(pow(delta10a / 1000 - delta11a + p_4p2_6_y * sq5 * sq6 + double(41) / 1000, 2) +
-           pow(delta8a, 2) + pow(delta9a, 2));
-  double delta4a =
-      1000 * (40 * sqm6 * delta8a / delta5a + 40 * cqm6 * delta9a / delta5a) *
-      sqrt(pow(delta7a, 2) + pow(delta6a, 2) + pow(sqm6 / 40 - delta14a + p_4p4_6_y * cq6, 2));
-  double delta3a = 1;
-  double delta2a = 1600;
-  double delta1a = 25 * (25 * cqm5 * sqm5 - 9 * cqm5 * sq6 - 195 * sqm5 - 25 * sqm5 * cqm5 +
-                         41 * sqm5 * sq5 + 9 * sqm5 * cq5 * cq6 + 1000 * p_4p2_6_y * cqm5 * cq6 +
-                         1000 * p_4p2_6_y * sqm5 * cq5 * sq6);
-
-  double f1a =
-      -(41 * sq5 * delta3a * (delta10a - 41 * cq5 + 1000 * p_4p2_6_y * sq5 * sq6 + 41)) / delta1a -
-      (41 * cq5 * delta3a *
-       (41 * sq5 - 25 * cqm5 + delta12a + 1000 * p_4p2_6_y * cq5 * sq6 - 195)) /
-          delta1a;
-  double f1b = -(41 * sq5 * delta2a * delta7a) / delta4a - (41 * cq5 * delta2a * delta6a) / delta4a;
-
-  double delta14b = 9 * sq6 / 1000;
-  double delta13b = 41 * sq5 / 1000;
-  double delta12b = 9 * cq5 * cq6 / 1000;
-  double delta11b = 41 * cq5 / 1000;
-  double delta10b = 9 * cq6 * sq5 / 1000;
-  double delta9b = sqm6 / 40 - delta14b + p_4p4_6_y * cq6;
-  double delta8b = sqm5 / 40 - delta14b + p_4p2_6_y * cq6;
-  double delta7b = delta13b - cqm5 / 40 + delta12b + p_4p2_6_y * cq5 * sq6 - double(39) / 200;
-  double delta6b =
-      sqrt(pow(delta10b - delta11b + p_4p4_6_y * sq5 * sq6 + double(41) / 1000, 2) +
-           pow(delta13b - cqm6 / 40 + delta12b + p_4p4_6_y * cq5 * sq6 - double(7) / 50, 2) +
-           pow(delta9b, 2));
-  double delta5b = sqrt(pow(delta10b - delta11b + p_4p2_6_y * sq5 * sq6 + double(41) / 1000, 2) +
-                        pow(delta7b, 2) + pow(delta8b, 2));
-  double delta3b = 1;
-  double delta2b = 1;
-  double delta1b =
-      (25 * cqm5 * sqm5 - 9 * cqm5 * sq6 - 195 * sqm5 - 25 * sqm5 * cqm5 + 41 * sqm5 * sq5 +
-       9 * sqm5 * cq5 * cq6 + 1000 * p_4p2_6_y * cqm5 * cq6 + 1000 * p_4p2_6_y * sqm5 * cq5 * sq6);
-
-  double f2a = sq6 * delta2b * (25 * sqm5 - 9 * sq6 + 1000 * p_4p2_6_y * cq6) / delta1b -
-               cq6 * delta2b *
-                   (9 * cq6 - 195 * cq5 + 41 * sq5 - 25 * cq5 * cqm5 + 1000 * p_4p2_6_y * sq6) /
-                   delta1b;
-  double f2b =
-      -sq6 * delta3b * delta9b * delta5b / ((sqm6 * delta7b + cqm6 * delta8b) * delta6b) +
-      cq6 * delta3b * delta5b *
-          (9 * cq6 - 140 * cq5 + 41 * sq5 - 25 * cq5 * cqm6 + 1000 * p_4p4_6_y * sq6) /
-          (delta6b * (25 * cqm6 * sqm5 - 9 * cqm6 * sq6 - 195 * sqm6 - 25 * sqm6 * cqm5 +
-                      41 * sqm6 * sq5 + 9 * sqm6 * cq5 * cq6 + 1000 * p_4p2_6_y * cqm6 * cq6 +
-                      1000 * p_4p2_6_y * sqm6 * cq5 * sq6));
-
-  double tauj5 = f1a * taum5 + f1b * taum6;
-  double tauj6 = f2a * taum5 + f2b * taum6;
-
-  // vel
-  double qdm5 = actr_left_.handle->state.velocity * actr_left_.direction;
-  double qdm6 = actr_right_.handle->state.velocity * actr_right_.direction;
-
-  double det11 = f2b / (f2b * f1a - f1b * f2a);
-  double det12 = -f1b / (f2b * f1a - f1b * f2a);
-  double det21 = f2a / (f2a * f1b - f1a * f2b);
-  double det22 = -f1a / (f2a * f1b - f1a * f2b);
-
-  Eigen::Matrix<double, 2, 2> J_T;
-  J_T << det11, det12, det21, det22;
-
-  Eigen::Matrix<double, 2, 1> qdm56;
-  qdm56 << qdm5, qdm6;
-  Eigen::Matrix<double, 2, 1> qd56;
-  qd56 = J_T.transpose() * qdm56;
-
-  double qd5 = qd56[0];
-  double qd6 = qd56[1];
-
-  joint_pitch_.handle->state.position = q5;
-  joint_pitch_.handle->state.velocity = qd5;
-  joint_pitch_.handle->state.effort = tauj5;
-
-  joint_roll_.handle->state.position = q6;
-  joint_roll_.handle->state.velocity = qd6;
-  joint_roll_.handle->state.effort = tauj6;
-}
-
-void RightAnkleParallelTransmission::TransformJointToActuator() {
-  // pos
-  double q5Des = joint_pitch_.handle->cmd.position;
-  double q6Des = joint_roll_.handle->cmd.position;
-
-  p_4p2_6_y = 0.025;
-  p_4p4_6_y = -0.025;
-
-  double delta11 = -pow(l_p1p2, 2) +
-                   pow((p_4p2_6_x * cos(q5Des) - p_4m5_4_x + p_4p2_6_z * cos(q6Des) * sin(q5Des) +
-                        p_4p2_6_y * sin(q5Des) * sin(q6Des)),
-                       2);
-  double delta12 = p_4m5_4_z + p_4p2_6_x * sin(q5Des) - p_4p2_6_z * cos(q5Des) * cos(q6Des) -
-                   p_4p2_6_y * cos(q5Des) * sin(q6Des);
-  double delta13 = p_4p2_6_y * cos(q6Des) - p_4p2_6_z * sin(q6Des);
-
-  double a1 = 2 * delta13 * p_m5p1_m5_z;
-  double b1 = 2 * delta12 * p_m5p1_m5_z;
-  double c1 = -(delta11 + pow(delta12, 2) + pow(delta13, 2) + pow(p_m5p1_m5_z, 2));
-
-  double delta21 = -pow(l_p3p4, 2) +
-                   pow((p_4p4_6_x * cos(q5Des) - p_4m6_4_x + p_4p4_6_z * cos(q6Des) * sin(q5Des) +
-                        p_4p4_6_y * sin(q5Des) * sin(q6Des)),
-                       2);
-  double delta22 = p_4m6_4_z + p_4p4_6_x * sin(q5Des) - p_4p4_6_z * cos(q5Des) * cos(q6Des) -
-                   p_4p4_6_y * cos(q5Des) * sin(q6Des);
-  double delta23 = p_4p4_6_y * cos(q6Des) - p_4p4_6_z * sin(q6Des);
-
-  double a2 = 2 * delta23 * p_m6p3_m6_z;
-  double b2 = 2 * delta22 * p_m6p3_m6_z;
-  double c2 = -(delta21 + pow(delta22, 2) + pow(delta23, 2) + pow(p_m6p3_m6_z, 2));
-
-  double qm5Des = 0;
-  double qm6Des = 0;
-
-  qm5Des = -acos(c1 / sqrt(pow(a1, 2) + pow(b1, 2))) + atan(a1 / b1) + 1.2028;
-  qm6Des = acos(c2 / sqrt(pow(a2, 2) + pow(b2, 2))) + atan(a2 / b2) - 1.2030;
-
-  // torque
-  double q5 = joint_pitch_.handle->state.position;
-  double q6 = joint_roll_.handle->state.position;
-
-  double qm5 = actr_left_.handle->state.position * actr_left_.direction;
-  double qm6 = actr_right_.handle->state.position * actr_right_.direction;
-
-  double tau5Des = joint_pitch_.handle->cmd.effort;
-  double tau6Des = joint_roll_.handle->cmd.effort;
-
-  double cq5 = cos(q5);
-  double sq5 = sin(q5);
-  double cq6 = cos(q6);
-  double sq6 = sin(q6);
-  double cqm5 = 0;
-  double sqm5 = 0;
-  double cqm6 = 0;
-  double sqm6 = 0;
-
-  cqm5 = cos(qm5 - 1.2028);
-  sqm5 = sin(qm5 - 1.2028);
-  cqm6 = cos(qm6 + 1.2030);
-  sqm6 = sin(qm6 + 1.2030);
-  p_4p2_6_y = 0.025;
-  p_4p4_6_y = -0.025;
-
-  double delta14a = 9 * sq6 / 1000;
-  double delta13a = 41 * sq5 / 1000;
-  double delta12a = 9 * cq5 * cq6;
-  double delta11a = 41 * cq5 / 1000;
-  double delta10a = 9 * cq6 * sq5;
-  double delta9a = sqm5 / 40 - delta14a + p_4p2_6_y * cq6;
-  double delta8a =
-      delta13a - cqm5 / 40 + delta12a / 1000 + p_4p2_6_y * cq5 * sq6 - double(39) / 200;
-  double delta7a = delta10a / 1000 - delta11a + p_4p4_6_y * sq5 * sq6 + double(41) / 1000;
-  double delta6a = delta13a - cqm6 / 40 + delta12a / 1000 + p_4p4_6_y * cq5 * sq6 - double(7) / 50;
-  double delta5a =
-      sqrt(pow(delta10a / 1000 - delta11a + p_4p2_6_y * sq5 * sq6 + double(41) / 1000, 2) +
-           pow(delta8a, 2) + pow(delta9a, 2));
-  double delta4a =
-      1000 * (40 * sqm6 * delta8a / delta5a + 40 * cqm6 * delta9a / delta5a) *
-      sqrt(pow(delta7a, 2) + pow(delta6a, 2) + pow(sqm6 / 40 - delta14a + p_4p4_6_y * cq6, 2));
-  double delta3a = 1;
-  double delta2a = 1600;
-  double delta1a = 25 * (25 * cqm5 * sqm5 - 9 * cqm5 * sq6 - 195 * sqm5 - 25 * sqm5 * cqm5 +
-                         41 * sqm5 * sq5 + 9 * sqm5 * cq5 * cq6 + 1000 * p_4p2_6_y * cqm5 * cq6 +
-                         1000 * p_4p2_6_y * sqm5 * cq5 * sq6);
-
-  double f1a =
-      -(41 * sq5 * delta3a * (delta10a - 41 * cq5 + 1000 * p_4p2_6_y * sq5 * sq6 + 41)) / delta1a -
-      (41 * cq5 * delta3a *
-       (41 * sq5 - 25 * cqm5 + delta12a + 1000 * p_4p2_6_y * cq5 * sq6 - 195)) /
-          delta1a;
-  double f1b = -(41 * sq5 * delta2a * delta7a) / delta4a - (41 * cq5 * delta2a * delta6a) / delta4a;
-
-  double delta14b = 9 * sq6 / 1000;
-  double delta13b = 41 * sq5 / 1000;
-  double delta12b = 9 * cq5 * cq6 / 1000;
-  double delta11b = 41 * cq5 / 1000;
-  double delta10b = 9 * cq6 * sq5 / 1000;
-  double delta9b = sqm6 / 40 - delta14b + p_4p4_6_y * cq6;
-  double delta8b = sqm5 / 40 - delta14b + p_4p2_6_y * cq6;
-  double delta7b = delta13b - cqm5 / 40 + delta12b + p_4p2_6_y * cq5 * sq6 - double(39) / 200;
-  double delta6b =
-      sqrt(pow(delta10b - delta11b + p_4p4_6_y * sq5 * sq6 + double(41) / 1000, 2) +
-           pow(delta13b - cqm6 / 40 + delta12b + p_4p4_6_y * cq5 * sq6 - double(7) / 50, 2) +
-           pow(delta9b, 2));
-  double delta5b = sqrt(pow(delta10b - delta11b + p_4p2_6_y * sq5 * sq6 + double(41) / 1000, 2) +
-                        pow(delta7b, 2) + pow(delta8b, 2));
-  double delta3b = 1;
-  double delta2b = 1;
-  double delta1b =
-      (25 * cqm5 * sqm5 - 9 * cqm5 * sq6 - 195 * sqm5 - 25 * sqm5 * cqm5 + 41 * sqm5 * sq5 +
-       9 * sqm5 * cq5 * cq6 + 1000 * p_4p2_6_y * cqm5 * cq6 + 1000 * p_4p2_6_y * sqm5 * cq5 * sq6);
-
-  double f2a = sq6 * delta2b * (25 * sqm5 - 9 * sq6 + 1000 * p_4p2_6_y * cq6) / delta1b -
-               cq6 * delta2b *
-                   (9 * cq6 - 195 * cq5 + 41 * sq5 - 25 * cq5 * cqm5 + 1000 * p_4p2_6_y * sq6) /
-                   delta1b;
-  double f2b =
-      -sq6 * delta3b * delta9b * delta5b / ((sqm6 * delta7b + cqm6 * delta8b) * delta6b) +
-      cq6 * delta3b * delta5b *
-          (9 * cq6 - 140 * cq5 + 41 * sq5 - 25 * cq5 * cqm6 + 1000 * p_4p4_6_y * sq6) /
-          (delta6b * (25 * cqm6 * sqm5 - 9 * cqm6 * sq6 - 195 * sqm6 - 25 * sqm6 * cqm5 +
-                      41 * sqm6 * sq5 + 9 * sqm6 * cq5 * cq6 + 1000 * p_4p2_6_y * cqm6 * cq6 +
-                      1000 * p_4p2_6_y * sqm6 * cq5 * sq6));
-
-  double taum5Des = (f2b * tau5Des - f1b * tau6Des) / (f2b * f1a - f1b * f2a);
-  double taum6Des = (f2a * tau5Des - f1a * tau6Des) / (f2a * f1b - f1a * f2b);
-
-  // vel
-  double qd5Des = joint_pitch_.handle->cmd.velocity;
-  double qd6Des = joint_roll_.handle->cmd.velocity;
-
-  double det11 = f2b / (f2b * f1a - f1b * f2a);
-  double det12 = -f1b / (f2b * f1a - f1b * f2a);
-  double det21 = f2a / (f2a * f1b - f1a * f2b);
-  double det22 = -f1a / (f2a * f1b - f1a * f2b);
-
-  Eigen::Matrix<double, 2, 2> J_T;
-  J_T << det11, det12, det21, det22;
-  Eigen::Matrix<double, 2, 2> J;
-  J = J_T.transpose();
-
-  Eigen::Matrix<double, 2, 1> qd56Des;
-  qd56Des << qd5Des, qd6Des;
-  // double determinant = J_T.determinant();
-
-  // // 检查行列式是否为零
-  // if (determinant == 0) {
-  //     std::cerr << "Error: Matrix is singular and cannot be inverted." << std::endl;
-  //     return -1;
-  // }
-  Eigen::Matrix<double, 2, 1> qdm56Des;
-  qdm56Des = J.inverse() * qd56Des;
-
-  double qdm5Des = qdm56Des[0];
-  double qdm6Des = qdm56Des[1];
-
-  actr_left_.handle->cmd.position = qm5Des * actr_left_.direction;
-  actr_left_.handle->cmd.velocity = qdm5Des * actr_left_.direction;
-  actr_left_.handle->cmd.effort = taum5Des * actr_left_.direction;
-  actr_left_.handle->cmd.kp = joint_pitch_.handle->cmd.kp;
-  actr_left_.handle->cmd.kd = joint_pitch_.handle->cmd.kd;
-
-  actr_right_.handle->cmd.position = qm6Des * actr_right_.direction;
-  actr_right_.handle->cmd.velocity = qdm6Des * actr_right_.direction;
-  actr_right_.handle->cmd.effort = taum6Des * actr_right_.direction;
-  actr_right_.handle->cmd.kp = joint_roll_.handle->cmd.kp;
-  actr_right_.handle->cmd.kd = joint_roll_.handle->cmd.kd;
-}
-
+    std::string name,std::string path,ActuatorHandle actr_left,ActuatorHandle actr_right,
+    JointHandle joint_pitch,JointHandle joint_roll)
+    : AnkleParallelTransmission(std::move(name),std::move(path),false,actr_left,actr_right,joint_pitch,joint_roll) {}
 }  // namespace xyber_x1_infer::dcu_driver_module

@@ -362,7 +362,7 @@ transmission:                               # 传动层配置
     actuator_right: left_ankle_right_actuator
     direction_left: 1.0
     direction_right: 1.0
-    param_path: cfg/dcu_driver_module/ankle_trans_x1.yaml
+    param_path: cfg/dcu_driver_module/ankle_f1.yaml
 
   - name: right_hip_pitch_trans
     type: SimpleTransmission
@@ -396,4 +396,4 @@ transmission:                               # 传动层配置
     actuator_right: right_ankle_right_actuator    # 绑定的 右侧连杆执行器
     direction_left: 1.0                           # 左侧连杆执行器的方向
     direction_right: 1.0                          # 右侧连杆执行器的方向
-    param_path: cfg/dcu_driver_module/ankle_trans_x1.yaml  # 其他配置参数
+    param_path: cfg/dcu_driver_module/ankle_f1.yaml  # 其他配置参数

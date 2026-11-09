@@ -4,7 +4,9 @@
 #pragma once
 
 // cpp
+#include <atomic>
 #include <future>
+#include <mutex>
 #include <thread>
 #include <unordered_map>
 
@@ -42,6 +44,9 @@ class DcuDriverModule : public aimrt::ModuleBase {
 
   void JointCmdCallback(const std::shared_ptr<const my_ros2_proto::msg::JointCommand>& msg);
 
+  // Caller holds rw_mtx_. A failed conversion latches until module restart.
+  void StopActuatorsOnTransmissionFault(const char* reason = nullptr);
+
   // [测试新增] 新加的测试方法，非原版代码
   // Hold constant-speed MIT on all actuators each PublishLoop cycle.
   // Edit parameters inside ApplyTestAllMitCmd() directly for bring-up.
@@ -52,6 +57,7 @@ class DcuDriverModule : public aimrt::ModuleBase {
   bool enable_actuator_ = false;
   double publish_frequecy_ = 100.0f;
   std::atomic_bool is_running_ = false;
+  std::atomic_bool transmission_fault_ = false;
   std::string imu_dcu_name_;
   std::mutex rw_mtx_;
   std::thread publish_thread_;

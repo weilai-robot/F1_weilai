@@ -3,6 +3,7 @@
 
 #include "dcu_driver_module/dcu_driver_module.h"
 
+#include <cmath>
 #include <ctime>
 #include "aimrt_module_ros2_interface/channel/ros2_channel.h"
 #include "my_ros2_proto/msg/joy_stick_data.hpp"
@@ -409,13 +410,6 @@ void DcuDriverModule::PublishLoop() {
     stamp.sec = now.tv_sec;
     stamp.nanosec = now.tv_usec * 1000;
 
-    // refresh actuator state data
-    for (auto& [name, data] : actuator_data_space_) {
-      data.state.effort = xyber_ctrl_->GetEffort(name);
-      data.state.velocity = xyber_ctrl_->GetVelocity(name);
-      data.state.position = xyber_ctrl_->GetPosition(name);
-    }
-
     // Bring-up: hold the same MIT target on all actuators each cycle.
     // Edit parameters in ApplyTestAllMitCmd(); comment out this call for normal /joint_cmd control.
     // 测试方法
@@ -423,7 +417,27 @@ void DcuDriverModule::PublishLoop() {
     // transmission
     {
       std::lock_guard<std::mutex> lock(rw_mtx_);
-      transmission_.TransformActuatorToJoint();
+      // Read and convert one coherent motor feedback snapshot.
+      for (auto& [name, data] : actuator_data_space_) {
+        data.state.effort = xyber_ctrl_->GetEffort(name);
+        data.state.velocity = xyber_ctrl_->GetVelocity(name);
+        data.state.position = xyber_ctrl_->GetPosition(name);
+      }
+      if (!transmission_fault_) {
+        try {
+          transmission_.TransformActuatorToJoint();
+        } catch (const std::exception& e) {
+          StopActuatorsOnTransmissionFault(e.what());
+        }
+      } else {
+        StopActuatorsOnTransmissionFault();
+      }
+    }
+    if (transmission_fault_) {
+      // Do not publish partially converted or fabricated joint feedback.
+      next_loop_time += period;
+      std::this_thread::sleep_until(next_loop_time);
+      continue;
     }
     // publish joint state
     // uint32_t i = 0;
@@ -506,11 +520,33 @@ void DcuDriverModule::ApplyTestAllMitCmd() {
   }
 }
 
+void DcuDriverModule::StopActuatorsOnTransmissionFault(const char* reason) {
+  const bool already_latched = transmission_fault_.exchange(true);
+  if (!already_latched) {
+    AIMRT_ERROR("Transmission fault latched; zero-effort MIT commands sent to all actuators. "
+                "Restart the module after correcting the cause: {}", reason ? reason : "unknown");
+  }
+  for (auto& [name, data] : actuator_data_space_) {
+    data.cmd.position = std::isfinite(data.state.position) ? data.state.position : 0.0;
+    data.cmd.velocity = 0.0;
+    data.cmd.effort = 0.0;
+    data.cmd.kp = 0.0;
+    data.cmd.kd = 0.0;
+    xyber_ctrl_->SetMitCmd(name, data.cmd.position, 0.0, 0.0, 0.0, 0.0);
+  }
+}
+
 void DcuDriverModule::JointCmdCallback(
     const std::shared_ptr<const my_ros2_proto::msg::JointCommand>& msg) {
   // AIMRT_DEBUG("Received joint cmd data: {}", my_ros2_proto::msg::to_yaml(*msg));
   if (!is_running_) {
     AIMRT_WARN("JointCmdCallback dropped: module not running (is_running_=false).");
+    return;
+  }
+  // Serialize feedback snapshots, command conversion and the fault latch.
+  std::lock_guard<std::mutex> lock(rw_mtx_);
+  if (transmission_fault_) {
+    StopActuatorsOnTransmissionFault();
     return;
   }
   // cache cmd data
@@ -529,9 +565,11 @@ void DcuDriverModule::JointCmdCallback(
     it->second.cmd.kd = msg->damping[i];
   }
   // transmission
-  {
-    std::lock_guard<std::mutex> lock(rw_mtx_);
+  try {
     transmission_.TransformJointToActuator();
+  } catch (const std::exception& e) {
+    StopActuatorsOnTransmissionFault(e.what());
+    return;
   }
   // send to actuator
   for (const auto& [name, data] : actuator_data_space_) {

@@ -1,0 +1,53 @@
+# Generated from ankle_parallel_validation/config/new_hardware.json and lookup_tables/metadata.json.
+# All positions are meters; all angles are radians. Raw CAN positive: rear-view CCW.
+# Published grid is cropped to current C++ IK-consistent nodes; see lookup_tables/metadata.json.
+# Feedback effort is passed through without adding any current/torque conversion.
+schema_version: 1
+revision: hardware_aligned_20261102
+table:
+  file: ankle_trans_f1_new.yaml
+  rows: 344
+  columns: 343
+  motor_origin_rad: [-1.4, -1.0]
+  motor_step_rad: 0.0069813170079773184
+  node_length_tolerance_m: 1.0e-9
+  inverse_motor_tolerance_rad: 9.9999999999999995e-08
+  interpolated_length_tolerance_m: 1.0e-6
+  joint_roundtrip_tolerance_rad: 0.0001
+  coordinate_epsilon: 1.0e-12
+left_geometry:
+  - motor_center: [-0.041, 0.0, 0.1989001]
+    foot_attachment: [-0.041, 0.025, 0.0089001]
+    radius: 0.025000000000000001
+    rod_length: 0.19
+    zero_angle: -1.5707963267948966
+    assembly_sign: -1
+    motor_direction: -1
+  - motor_center: [-0.041, 0.0, 0.1309001]
+    foot_attachment: [-0.041, -0.025, 0.0089001]
+    radius: 0.025000000000000001
+    rod_length: 0.122
+    zero_angle: 1.5707963267948966
+    assembly_sign: 1
+    motor_direction: -1
+right_geometry:
+  - motor_center: [-0.041, -0.0, 0.1989001]
+    foot_attachment: [-0.041, -0.025, 0.0089001]
+    radius: 0.025000000000000001
+    rod_length: 0.19
+    zero_angle: 1.5707963267948966
+    assembly_sign: 1
+    motor_direction: -1
+  - motor_center: [-0.041, -0.0, 0.1309001]
+    foot_attachment: [-0.041, 0.025, 0.0089001]
+    radius: 0.025000000000000001
+    rod_length: 0.122
+    zero_angle: -1.5707963267948966
+    assembly_sign: -1
+    motor_direction: -1
+provenance:
+  geometry_sha256: 34e4ad1bd23559819023d9c5e799e1395a85b7a5ca8a629fb0001d0637bd0e3d
+  table_sha256: 1dc30b4ab5c0200a20182c5e7968fb71e3f082ae2474098e18bb91e949bb0d83
+  lookup_report_sha256: 9702dfc10d9c1076c84856f04a0735c44763797eac3d857ddc292d440fc2fd8d
+  domain_policy: largest_origin_anchored_rectangle_matching_current_cpp_inverse
+  numerics: "Software checks from lookup_tables/metadata.json and config/validation.json; not hardware limits."
