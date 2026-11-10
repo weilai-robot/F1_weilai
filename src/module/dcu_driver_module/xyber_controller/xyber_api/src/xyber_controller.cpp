@@ -1,7 +1,6 @@
 /*
  * @Author: richie.li
  * @Date: 2024-10-21 14:10:06
- * @LastEditors: zhangmy
  * @LastEditTime: 2026-10-08 11:00:00
  */
 
@@ -141,15 +140,6 @@ bool XyberController::AttachEncosMotor(std::string slave_name, uint8_t passage, 
       .name = actuator_name,
       .params = {{"passage", std::to_string(passage)},
                  {"motor_id", std::to_string(motor_id)}}});
-}
-
-void XyberController::SetEncosCanIde(const std::string& slave_name, uint8_t can_ide) {
-  auto it = slave_map_.find(slave_name);
-  if (it == slave_map_.end()) {
-    LOG_ERROR("Can`t find slave %s, SetEncosCanIde failed.", slave_name.c_str());
-    return;
-  }
-  it->second->SetCanIde(can_ide);
 }
 
 bool XyberController::SetRealtime(int rt_priority, int bind_cpu) {

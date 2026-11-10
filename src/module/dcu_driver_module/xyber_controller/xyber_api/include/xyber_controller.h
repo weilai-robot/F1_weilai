@@ -1,7 +1,6 @@
 /*
  * @Author: richie.li
  * @Date: 2024-10-21 14:10:06
- * @LastEditors: zhangmy
  * @LastEditTime: 2026-10-08 11:00:00
  */
 
@@ -39,8 +38,8 @@ class XyberController {
 
   /**
    * @brief: Create a slave (dcu / encos / ...) via SlaveFactory, by cfg.type
-   * @param {SlaveConfig&} slave type / name / ecat_id (+ params: can_ide for
-   *        encos, ...; each slave type reads the keys it owns)
+   * @param {SlaveConfig&} slave type / name / ecat_id (+ params; each slave
+   *        type reads the keys it owns)
    * @return {bool} true for success
    */
   bool CreateSlave(const SlaveConfig& cfg);
@@ -91,7 +90,7 @@ class XyberController {
    * @brief: Create an Encos motor and attach it to an Encos slave PDO slot
    * @param slave_name Encos slave name
    * @param passage PDO slot in [1, 6]; 1~3 -> CAN1, 4~6 -> CAN2
-   * @param type ENCOS_EC_A8112 / ENCOS_EC_A4314 / ENCOS_MOTOR (same protocol)
+   * @param type ENCOS_EC_A8112 / ENCOS_EC_A4315 (same protocol)
    * @param actuator_name actuator name used by upper layer
    * @param motor_id CAN id written into Motor_Msg.id
    * @return {bool} true for success
@@ -99,13 +98,6 @@ class XyberController {
    */
   bool AttachEncosMotor(std::string slave_name, uint8_t passage, ActuatorType type,
                       std::string actuator_name, uint8_t motor_id);
-
-  /**
-   * @brief: Set can_ide field of an Encos slave PDO
-   * @param slave_name Encos slave name
-   * @param can_ide value written to EncosSlavePacket.can_ide
-   */
-  void SetEncosCanIde(const std::string& slave_name, uint8_t can_ide);
 
   /**
    * @brief: make realtime priority for ecat io thread
@@ -214,6 +206,7 @@ class XyberController {
   /**
    * @brief Get the Torque
    *        Working for PowerFlowL and OminiPicker too.
+   *        Encos: feedback phase current × model Kt (N·m).
    *
    * @param name
    * @return float (Nm)

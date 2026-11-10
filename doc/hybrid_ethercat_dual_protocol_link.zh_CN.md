@@ -263,7 +263,7 @@ dcu_network:
     can_ide: 1
     motors:
       - name: lumbar_yaw_actuator
-        type: Encos_EC_A4314
+        type: Encos_EC_A4315
         passage: 1
         motor_id: 1
 ```

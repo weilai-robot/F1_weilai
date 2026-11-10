@@ -1,7 +1,5 @@
 /*
- * @Author: zhangmy
  * @Date: 2026-10-08 10:30:00
- * @LastEditors: zhangmy
  * @LastEditTime: 2026-10-08 10:30:00
  */
 
@@ -45,10 +43,10 @@ void SlaveFactory::RegisterBuiltinSlaves() {
       return new Dcu(cfg.name, cfg.ecat_id);
     });
     const bool encos_ok = Register("encos", [](const SlaveConfig& cfg) -> SlaveBase* {
-      // can_ide: 1 = extended frame (force-position hybrid / MIT), legacy default.
-      const uint8_t can_ide = GetParam<uint8_t>(cfg.params, "can_ide", 1);
-      WarnUnusedParams(cfg.params, {"can_ide"}, cfg.name);
-      return new EncosSlave(cfg.name, cfg.ecat_id, can_ide);
+      // Frame type is fixed to standard (manual §1) inside EncosSlave; no
+      // slave-level params on this type.
+      WarnUnusedParams(cfg.params, {}, cfg.name);
+      return new EncosSlave(cfg.name, cfg.ecat_id);
     });
     if (!dcu_ok || !encos_ok) {
       LOG_ERROR("SlaveFactory: builtin registration incomplete (dcu=%d, encos=%d).",

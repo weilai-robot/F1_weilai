@@ -1,7 +1,5 @@
 /*
- * @Author: zhangmy
  * @Date: 2026-10-08 10:30:00
- * @LastEditors: zhangmy
  * @LastEditTime: 2026-10-08 10:30:00
  */
 
@@ -86,9 +84,9 @@ void ActuatorFactory::RegisterBuiltinActuators() {
       WarnUnusedParams(i.params, {"can_id", "channel"}, i.name);
       return new xyber_omni_picker::OmniPicker(i.name, can_id, ch);
     });
-    // The three Encos types share the same CAN protocol / actuator class.
-    for (ActuatorType type :
-         {ActuatorType::ENCOS_MOTOR, ActuatorType::ENCOS_EC_A8112, ActuatorType::ENCOS_EC_A4314}) {
+    // Both Encos models share the same CAN protocol / actuator class; the type
+    // only selects the per-model MIT ranges (common_type.h).
+    for (ActuatorType type : {ActuatorType::ENCOS_EC_A8112, ActuatorType::ENCOS_EC_A4315}) {
       Register(type, [](const ActuatorAttachInfo& i) -> Actuator* {
         uint8_t motor_id = 0;
         if (!GetRequiredParam(i.params, "motor_id", motor_id)) {

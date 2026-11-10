@@ -1,7 +1,5 @@
 /*
- * @Author: zhangmy
  * @Date: 2026-08-13 16:39:00
- * @LastEditors: zhangmy
  * @LastEditTime: 2026-10-08 11:00:00
  */
 
@@ -20,13 +18,14 @@ using namespace std::chrono_literals;
 
 namespace xyber {
 
-EncosSlave::EncosSlave(std::string name, int32_t ecat_id, uint8_t can_ide)
+EncosSlave::EncosSlave(std::string name, int32_t ecat_id)
     : SlaveBase(ecat_id, name) {
   LOG_DEBUG("EncosSlave %s id %u created.", name_.c_str(), id_);
   memset(&send_buf_, 0, sizeof(send_buf_));
   memset(&recv_buf_, 0, sizeof(recv_buf_));
-  // Force-position hybrid (SetMitCmd) uses extended CAN frame.
-  send_buf_.can_ide = can_ide;
+  // Manual §1: control/query frames use standard 11-bit IDs (0x01~0x7FF).
+  // can_ide stays a packet field for board-firmware layout compatibility.
+  send_buf_.can_ide = 0;
   passage_slots_.fill(nullptr);
 }
 
@@ -78,8 +77,6 @@ void EncosSlave::OnStateChangeHook(NodeState next) {
   LOG_DEBUG("EncosSlave %s %d, state change: %s -> %s", name_.c_str(), id_,
             NodeStateStr(node_state_).c_str(), NodeStateStr(next).c_str());
 }
-
-void EncosSlave::SetCanIde(uint8_t can_ide) { send_buf_.can_ide = can_ide; }
 
 void EncosSlave::UpdateMotorNum() {
   // motor_num is informational only (motor count): the board firmware scans

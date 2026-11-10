@@ -28,9 +28,8 @@ enum class ActuatorType {
   POWER_FLOW_R52,
   POWER_FLOW_L28,
   OMNI_PICKER,
-  ENCOS_MOTOR,        // generic Encos motor (same protocol as the two models below)
   ENCOS_EC_A8112,     // EC-A8112-P1-18H
-  ENCOS_EC_A4314,     // EC-A4314-P2-36
+  ENCOS_EC_A4315,     // EC-A4315-P2-36
   UNKOWN,
 };
 
@@ -39,15 +38,9 @@ static ActuatorType StringToType(std::string type) {
   if (type == "POWER_FLOW_R52") return ActuatorType::POWER_FLOW_R52;
   if (type == "POWER_FLOW_L28") return ActuatorType::POWER_FLOW_L28;
   if (type == "OMNI_PICKER") return ActuatorType::OMNI_PICKER;
-  if (type == "ENCOS_MOTOR") return ActuatorType::ENCOS_MOTOR;
   if (type == "ENCOS_EC_A8112" || type == "EC-A8112-P1-18H") return ActuatorType::ENCOS_EC_A8112;
-  if (type == "ENCOS_EC_A4314" || type == "EC-A4314-P2-36") return ActuatorType::ENCOS_EC_A4314;
+  if (type == "ENCOS_EC_A4315" || type == "EC-A4315-P2-36") return ActuatorType::ENCOS_EC_A4315;
   return ActuatorType::UNKOWN;
-}
-
-static bool IsEncosMotorType(ActuatorType type) {
-  return type == ActuatorType::ENCOS_MOTOR || type == ActuatorType::ENCOS_EC_A8112 ||
-         type == ActuatorType::ENCOS_EC_A4314;
 }
 
 enum ActautorState : uint8_t {
@@ -91,6 +84,11 @@ struct MitParam {
   float kp_max = 0.0;
   float kd_min = 0.0;
   float kd_max = 0.0;
+  // MIT type-1 feedback phase-current range (Encos only; PowerFlow ignores it)
+  float cur_min = -30.0f;
+  float cur_max = 30.0f;
+  // Torque constant (N·m/A) to convert feedback current to torque; 0 = unknown
+  float kt = 0.0f;
 };
 
 #define PF_R52_MIT_MODE_DEFAULT_PARAM \
@@ -121,19 +119,43 @@ struct MitParam {
       .kd_max = 8.0f,                 \
   }
 
-// Encos (因克斯) force-position hybrid / MIT ranges from motor_control.c
-#define ENCOS_MIT_MODE_DEFAULT_PARAM \
-  {                                \
-      .pos_min = -12.5f,           \
-      .pos_max = 12.5f,            \
-      .vel_min = -18.0f,           \
-      .vel_max = 18.0f,            \
-      .toq_min = -30.0f,           \
-      .toq_max = 30.0f,            \
-      .kp_min = 0.0f,              \
-      .kp_max = 500.0f,            \
-      .kd_min = 0.0f,              \
-      .kd_max = 5.0f,              \
+// EC-A8112-P1-18H: TOR ±130 N·m, CUR ±70 A, Kt 2.34 N·m/A
+// (bench-queried 2026-11-09, doc/电机参数.txt; NOTE: differs from
+// HW-SPEC-0005 §2.3 which records ±90/±60/2.1 — spec row pending update)
+#define ENCOS_EC_A8112_MIT_PARAM \
+  {                              \
+      .pos_min = -12.5f,         \
+      .pos_max = 12.5f,          \
+      .vel_min = -18.0f,         \
+      .vel_max = 18.0f,          \
+      .toq_min = -130.0f,        \
+      .toq_max = 130.0f,         \
+      .kp_min = 0.0f,            \
+      .kp_max = 500.0f,          \
+      .kd_min = 0.0f,            \
+      .kd_max = 5.0f,            \
+      .cur_min = -70.0f,         \
+      .cur_max = 70.0f,          \
+      .kt = 2.34f,               \
+  }
+
+// EC-A4315-P2-36: TOR ±70 N·m, CUR ±30 A, Kt 2.8 N·m/A
+// (HW-SPEC-0005 §2.3; all values bench-verified 2026-11-09, doc/电机参数.txt)
+#define ENCOS_EC_A4315_MIT_PARAM \
+  {                              \
+      .pos_min = -12.5f,         \
+      .pos_max = 12.5f,          \
+      .vel_min = -18.0f,         \
+      .vel_max = 18.0f,          \
+      .toq_min = -70.0f,         \
+      .toq_max = 70.0f,          \
+      .kp_min = 0.0f,            \
+      .kp_max = 500.0f,          \
+      .kd_min = 0.0f,            \
+      .kd_max = 5.0f,            \
+      .cur_min = -30.0f,         \
+      .cur_max = 30.0f,          \
+      .kt = 2.8f,                \
   }
 
 /**
@@ -148,14 +170,14 @@ using ParamMap = std::map<std::string, std::string>;
 /**
  * @description: Slave creation params shared by all slave types. Fixed fields
  *               hold what every slave has (identity on the bus); everything
- *               type-specific (can_ide for encos, ...) goes into params and
- *               is read by the slave's own creator.
+ *               type-specific goes into params and is read by the slave's
+ *               own creator.
  */
 struct SlaveConfig {
   std::string type;        // "dcu" | "encos" | ...
   std::string name;
   int32_t ecat_id = 0;
-  ParamMap params;         // e.g. encos: can_ide; dcu: none
+  ParamMap params;         // per-type; read by the slave's own creator
 };
 
 /**

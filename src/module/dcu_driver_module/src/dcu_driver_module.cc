@@ -501,10 +501,10 @@ void DcuDriverModule::ApplyTestAllMitCmd() {
 
   // Edit these parameters for bring-up (constant-speed MIT).
   // tau ≈ kd * (vel_des - vel) when kp=0; pos is ignored.
-  constexpr float kVel = 1.0f;  // rad/s, Encos range ±18
+  constexpr float kVel = 0.0f;  // rad/s, Encos range ±18
   constexpr float kEffort = 0.0f;
-  constexpr float kKp = 0.0f;   // disable position tracking
-  constexpr float kKd = 1.0f;   // velocity tracking gain
+  constexpr float kKp = 300.0f;   // disable position tracking
+  constexpr float kKd = 5.0f;   // velocity tracking gain
   constexpr float kPos = 0.0f;  // unused when kp=0
 
   for (const auto& name : actuator_name_list_) {

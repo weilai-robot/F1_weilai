@@ -1,7 +1,5 @@
 /*
- * @Author: zhangmy
  * @Date: 2026-10-08 10:30:00
- * @LastEditors: zhangmy
  * @LastEditTime: 2026-10-08 10:30:00
  */
 
@@ -71,7 +69,6 @@ class SlaveBase : public ethercat_manager::EthercatNode {
   virtual bool HasImu() const { return false; }
   virtual DcuImu GetImuData() { return DcuImu(); }
   virtual void ApplyImuOffset() {}
-  virtual void SetCanIde(uint8_t can_ide) { (void)can_ide; }
 
  protected:
   std::string name_;

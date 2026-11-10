@@ -85,7 +85,7 @@ struct DcuConfig {
   bool enable = false;
   bool imu_enable = false;
   uint32_t ecat_id = 0;
-  xyber::ParamMap params;  // free-form slave params (e.g. encos can_ide), read by the slave creator
+  xyber::ParamMap params;  // free-form slave params, read by the slave creator
 
   struct Actuator {
     std::string name;

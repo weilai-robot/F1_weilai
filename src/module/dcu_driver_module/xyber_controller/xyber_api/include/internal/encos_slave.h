@@ -1,7 +1,5 @@
 /*
- * @Author: zhangmy
  * @Date: 2026-08-13 14:10:06
- * @LastEditors: zhangmy
  * @LastEditTime: 2026-10-08 11:00:00
  */
 
@@ -48,11 +46,7 @@ static_assert(sizeof(EncosSlavePacket) == 86, "EncosSlavePacket size mismatch");
 
 class EncosSlave : public SlaveBase {
  public:
-  /**
-   * @param can_ide CAN frame type: 1=extended (force-position hybrid / MIT),
-   *               0=standard. Written into the PDO at creation.
-   */
-  explicit EncosSlave(std::string name, int32_t ecat_id, uint8_t can_ide = 1);
+  explicit EncosSlave(std::string name, int32_t ecat_id);
   virtual ~EncosSlave();
 
   /**
@@ -61,8 +55,6 @@ class EncosSlave : public SlaveBase {
    */
   bool RegisterActuator(Actuator* actr, const ActuatorAttachInfo& info) override;
   Actuator* GetActautor(const std::string& name) override;
-
-  void SetCanIde(uint8_t can_ide) override;
 
  public:  // Actuator Stuff
   bool EnableAllActuator() override;

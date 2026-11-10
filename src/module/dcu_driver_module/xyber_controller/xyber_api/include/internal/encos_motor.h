@@ -1,7 +1,5 @@
 /*
- * @Author: zhangmy
  * @Date: 2026-08-13 16:39:00
- * @LastEditors: zhangmy
  * @LastEditTime: 2026-08-14 09:40:00
  */
 
@@ -22,7 +20,7 @@ namespace xyber_encos {
 class EncosMotor : public xyber::Actuator {
  public:
   /**
-   * @param type ENCOS_EC_A8112 / ENCOS_EC_A4314 / ENCOS_MOTOR (same CAN protocol)
+   * @param type ENCOS_EC_A8112 / ENCOS_EC_A4315 (same CAN protocol)
    * @param name actuator name
    * @param motor_id CAN id written into Motor_Msg.id
    * @param passage PDO slot in [1, 6]
@@ -67,7 +65,7 @@ class EncosMotor : public xyber::Actuator {
 
  private:
   uint8_t passage_ = 0;
-  xyber::MitParam mit_param_ = ENCOS_MIT_MODE_DEFAULT_PARAM;
+  xyber::MitParam mit_param_ = ENCOS_EC_A4315_MIT_PARAM;  // overridden per model in ctor
   xyber::Motor_Msg* cmd_msg_ = nullptr;
   xyber::Motor_Msg* state_msg_ = nullptr;
 
@@ -76,7 +74,7 @@ class EncosMotor : public xyber::Actuator {
   uint8_t error_ = 0;
   float position_ = 0.0f;  // rad
   float velocity_ = 0.0f;  // rad/s
-  float effort_ = 0.0f;    // Nm / A feedback from MIT frame
+  float current_ = 0.0f;   // phase current (A) from feedback frames; GetEffort() applies Kt
   float temperature_ = 0.0f;
 };
 

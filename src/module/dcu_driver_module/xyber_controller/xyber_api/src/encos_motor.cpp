@@ -1,5 +1,4 @@
 /*
- * @Author: zhangmy
  * @Date: 2026-08-13 16:39:00
  * @LastEditTime: 2026-08-14 09:40:00
  */
@@ -18,16 +17,24 @@ namespace {
 constexpr float kRadToDeg = 180.0f / static_cast<float>(M_PI);
 constexpr float kDegToRad = static_cast<float>(M_PI) / 180.0f;
 
-// Feedback current range for MIT response frame 1 (motor_control.c I_MIN/I_MAX)
-constexpr float kEncosIMin = -30.0f;
-constexpr float kEncosIMax = 30.0f;
-
 }  // namespace
 
 EncosMotor::EncosMotor(xyber::ActuatorType type, std::string name, uint8_t motor_id, uint8_t passage)
     // CtrlChannel is unused for Encos; keep a placeholder for Actuator base ctor.
-    // EC-A8112-P1-18H and EC-A4314-P2-36 share the same control protocol.
-    : Actuator(name, type, motor_id, xyber::CtrlChannel::CTRL_CH1), passage_(passage) {}
+    // EC-A8112-P1-18H and EC-A4315-P2-36 share the same control protocol.
+    : Actuator(name, type, motor_id, xyber::CtrlChannel::CTRL_CH1), passage_(passage) {
+  // MIT ranges / feedback current range / Kt are per-model (HW-SPEC-0005 §2.3).
+  // ActuatorFactory only registers ENCOS_EC_A8112 / ENCOS_EC_A4315; unknown
+  // types fail at factory lookup and never reach this ctor.
+  switch (type) {
+    case xyber::ActuatorType::ENCOS_EC_A8112:
+      mit_param_ = ENCOS_EC_A8112_MIT_PARAM;
+      break;
+    default:  // ENCOS_EC_A4315 (defensive fallback)
+      mit_param_ = ENCOS_EC_A4315_MIT_PARAM;
+      break;
+  }
+}
 
 void EncosMotor::SetDataFiled(uint8_t* send, uint8_t* recv) {
   // Bound to a whole Motor_Msg slot (not DCU-style 8B * (id-1) offset).
@@ -86,7 +93,7 @@ void EncosMotor::UpdateFeedback() {
 
     position_ = UintToFloat(pos_int, mit_param_.pos_min, mit_param_.pos_max, 16);
     velocity_ = UintToFloat(spd_int, mit_param_.vel_min, mit_param_.vel_max, 12);
-    effort_ = UintToFloat(cur_int, kEncosIMin, kEncosIMax, 12);
+    current_ = UintToFloat(cur_int, mit_param_.cur_min, mit_param_.cur_max, 12);
     if (state_msg_->dlc >= 7) {
       temperature_ = (static_cast<float>(state_msg_->data[6]) - 50.0f) / 2.0f;
     }
@@ -103,7 +110,7 @@ void EncosMotor::UpdateFeedback() {
     position_ = conv.f * kDegToRad;
     const int16_t cur_int =
         static_cast<int16_t>((state_msg_->data[5] << 8) | state_msg_->data[6]);
-    effort_ = cur_int / 100.0f;
+    current_ = cur_int / 100.0f;
     temperature_ = (static_cast<float>(state_msg_->data[7]) - 50.0f) / 2.0f;
   } else if (ack_status == 3 && state_msg_->dlc >= 8) {
     // Response frame 3 — speed float + current int
@@ -115,10 +122,10 @@ void EncosMotor::UpdateFeedback() {
     conv.b[1] = state_msg_->data[3];
     conv.b[2] = state_msg_->data[2];
     conv.b[3] = state_msg_->data[1];
-    velocity_ = conv.f;  // protocol uses float speed; treat as rad/s if already converted upstream
+    velocity_ = conv.f * 2.0f * static_cast<float>(M_PI) / 60.0f;  // spec §11.5: float32 in rpm -> rad/s
     const int16_t cur_int =
         static_cast<int16_t>((state_msg_->data[5] << 8) | state_msg_->data[6]);
-    effort_ = cur_int / 100.0f;
+    current_ = cur_int / 100.0f;
     temperature_ = (static_cast<float>(state_msg_->data[7]) - 50.0f) / 2.0f;
   }
 }
@@ -135,7 +142,7 @@ void EncosMotor::WriteCurTorCmd(int16_t cur_tor, uint8_t ctrl_status, uint8_t ac
     if (cur_tor < -2000) cur_tor = -2000;
   }
 
-  // set_motor_cur_tor: standard frame, needs slave can_ide=0
+  // set_motor_cur_tor: 3-byte standard frame (manual §5)
   cmd_msg_->id = id_;
   cmd_msg_->rtr = 0;
   cmd_msg_->dlc = 3;
@@ -150,15 +157,13 @@ void EncosMotor::RequestState(xyber::ActautorState state) {
 
   if (state == xyber::STATE_ENABLE) {
     // Encos has no PowerFlow-style enable bit; enter MIT hold (zero cmd) and mark enabled.
-    // Requires EncosSlave can_ide=1 (extended frame).
     SetMitCmd(position_, 0.0f, 0.0f, 0.0f, 0.0f);
     power_state_ = xyber::STATE_ENABLE;
     return;
   }
 
   if (state == xyber::STATE_DISABLE) {
-    // Full brake (ctrl_status=2). Requires EncosSlave can_ide=0 for this frame type.
-    // Prefer zero-torque MIT hold when board stays in extended-frame MIT mode.
+    // Full brake would be 0x03 ctrl_status=2; prefer zero-torque MIT hold.
     SetMitCmd(position_, 0.0f, 0.0f, 0.0f, 0.0f);
     power_state_ = xyber::STATE_DISABLE;
   }
@@ -218,7 +223,12 @@ void EncosMotor::SetEffort(float cur) {
 
 float EncosMotor::GetEffort() {
   UpdateFeedback();
-  return effort_;
+  // Feedback frames carry phase current (A). Report output torque (N·m) via
+  // the model's Kt; kt=0 (should not happen) falls back to raw amps.
+  if (mit_param_.kt > 0.0f) {
+    return current_ * mit_param_.kt;
+  }
+  return current_;
 }
 
 void EncosMotor::SetVelocity(float vel) {
@@ -290,7 +300,7 @@ float EncosMotor::GetPosition() {
 void EncosMotor::SetMitCmd(float pos, float vel, float toq, float kp, float kd) {
   if (!cmd_msg_) return;
 
-  // send_motor_ctrl_cmd — force-position hybrid, extended frame (can_ide=1 on slave)
+  // send_motor_ctrl_cmd — force-position hybrid (manual §2), standard frame
   mode_ = xyber::MODE_MIT;
 
   kp = Clamp(kp, mit_param_.kp_min, mit_param_.kp_max);
