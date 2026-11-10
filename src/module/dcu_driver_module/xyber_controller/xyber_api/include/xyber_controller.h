@@ -90,7 +90,7 @@ class XyberController {
    * @brief: Create an Encos motor and attach it to an Encos slave PDO slot
    * @param slave_name Encos slave name
    * @param passage PDO slot in [1, 6]; 1~3 -> CAN1, 4~6 -> CAN2
-   * @param type ENCOS_EC_A8112 / ENCOS_EC_A4315 (same protocol)
+   * @param type ENCOS_EC_A8116 / ENCOS_EC_A4315 (same protocol)
    * @param actuator_name actuator name used by upper layer
    * @param motor_id CAN id written into Motor_Msg.id
    * @return {bool} true for success

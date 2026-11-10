@@ -320,7 +320,7 @@ typedef struct {
 | 1 阻尼 | 同上 | `kd=quantize(safe_kd,0..5,9bit)`，其余同零力矩 |
 | 2 停发 | 不发帧 | 依赖电机 500 ms 自身超时停转（HW-SPEC-0005 §7） |
 
-量化公式（与主站 `FloatToUint` 一致，截断取整）：`raw = (x - x_min) × (2^n - 1) / (x_max - x_min)`。量程按槽电机型号（OD 0x2012：0=A8112 → TOR ±90/CUR ±60；1=A4315 → ±70/±30；2=自定义走 0x2013 量程块）。
+量化公式（与主站 `FloatToUint` 一致，截断取整）：`raw = (x - x_min) × (2^n - 1) / (x_max - x_min)`。量程按槽电机型号（OD 0x2012：0=A8116 → TOR ±90/CUR ±60；1=A4315 → ±70/±30；2=自定义走 0x2013 量程块）。
 
 ---
 
@@ -447,7 +447,7 @@ typedef struct {
 7. OP 进入瞬间可能收到全零 PDO → 视为无指令（R-601b/d）。
 8. 主站 ErrorHandler 依赖标准 AL ACK 语义 + 具体状态码（R-905）。
 
-**主站侧联动**（不在本固件范围，另行排期）：`EncosSlavePacket` 扩展至 90/150 B（§6 结构，含 slot_ide/cmd_seq/ctrl_word 与状态块+IMU 预留）、状态字/新鲜度消费、`>=86` 校验回归 `==`、MIT 量程对齐（主站默认 ±30 与 A8112/A4315 出厂量程不一致）。
+**主站侧联动**（不在本固件范围，另行排期）：`EncosSlavePacket` 扩展至 90/150 B（§6 结构，含 slot_ide/cmd_seq/ctrl_word 与状态块+IMU 预留）、状态字/新鲜度消费、`>=86` 校验回归 `==`、MIT 量程对齐（主站默认 ±30 与 A8116/A4315 出厂量程不一致）。
 
 ---
 

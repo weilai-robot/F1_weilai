@@ -154,15 +154,15 @@ dcu_network:              # DCU通信网络，请根据实机连接情况配置
     imu_enable: false
     motors:  # passage 定 CAN 总线: 1~3 -> CAN1, 4~6 -> CAN2, 不要求从 1 连续(空槽 dlc==0 板端自动跳过); motor_id 按电机实烧 CAN ID 填
       - name: lumbar_yaw_actuator
-        type: ENCOS_EC_A8112
+        type: ENCOS_EC_A8116
         passage: 1
         motor_id: 1
       - name: left_hip_pitch_actuator
-        type: ENCOS_EC_A8112
+        type: ENCOS_EC_A8116
         passage: 2
         motor_id: 2
       - name: right_hip_pitch_actuator
-        type: ENCOS_EC_A8112
+        type: ENCOS_EC_A8116
         passage: 3
         motor_id: 3
       
@@ -173,15 +173,15 @@ dcu_network:              # DCU通信网络，请根据实机连接情况配置
     imu_enable: false
     motors:  # passage 定 CAN 总线: 1~3 -> CAN1, 4~6 -> CAN2, 不要求从 1 连续(空槽 dlc==0 板端自动跳过); motor_id 按电机实烧 CAN ID 填
       - name: left_hip_roll_actuator
-        type: ENCOS_EC_A8112
+        type: ENCOS_EC_A8116
         passage: 2
         motor_id: 2
       - name: left_hip_yaw_actuator
-        type: ENCOS_EC_A8112
+        type: ENCOS_EC_A8116
         passage: 3
         motor_id: 3
       - name: left_knee_pitch_actuator
-        type: ENCOS_EC_A8112
+        type: ENCOS_EC_A8116
         passage: 4
         motor_id: 4
       - name: left_ankle_right_actuator
@@ -201,15 +201,15 @@ dcu_network:              # DCU通信网络，请根据实机连接情况配置
     imu_enable: false
     motors:  # passage 定 CAN 总线: 1~3 -> CAN1, 4~6 -> CAN2, 不要求从 1 连续(空槽 dlc==0 板端自动跳过); motor_id 按电机实烧 CAN ID 填
       - name: right_hip_roll_actuator
-        type: ENCOS_EC_A8112
+        type: ENCOS_EC_A8116
         passage: 2
         motor_id: 2
       - name: right_hip_yaw_actuator
-        type: ENCOS_EC_A8112
+        type: ENCOS_EC_A8116
         passage: 3
         motor_id: 3
       - name: right_knee_pitch_actuator
-        type: ENCOS_EC_A8112
+        type: ENCOS_EC_A8116
         passage: 4
         motor_id: 4
       - name: right_ankle_left_actuator

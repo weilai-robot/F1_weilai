@@ -21,14 +21,14 @@ constexpr float kDegToRad = static_cast<float>(M_PI) / 180.0f;
 
 EncosMotor::EncosMotor(xyber::ActuatorType type, std::string name, uint8_t motor_id, uint8_t passage)
     // CtrlChannel is unused for Encos; keep a placeholder for Actuator base ctor.
-    // EC-A8112-P1-18H and EC-A4315-P2-36 share the same control protocol.
+    // EC-A8116-P1-18H and EC-A4315-P2-36 share the same control protocol.
     : Actuator(name, type, motor_id, xyber::CtrlChannel::CTRL_CH1), passage_(passage) {
   // MIT ranges / feedback current range / Kt are per-model (HW-SPEC-0005 §2.3).
-  // ActuatorFactory only registers ENCOS_EC_A8112 / ENCOS_EC_A4315; unknown
+  // ActuatorFactory only registers ENCOS_EC_A8116 / ENCOS_EC_A4315; unknown
   // types fail at factory lookup and never reach this ctor.
   switch (type) {
-    case xyber::ActuatorType::ENCOS_EC_A8112:
-      mit_param_ = ENCOS_EC_A8112_MIT_PARAM;
+    case xyber::ActuatorType::ENCOS_EC_A8116:
+      mit_param_ = ENCOS_EC_A8116_MIT_PARAM;
       break;
     default:  // ENCOS_EC_A4315 (defensive fallback)
       mit_param_ = ENCOS_EC_A4315_MIT_PARAM;

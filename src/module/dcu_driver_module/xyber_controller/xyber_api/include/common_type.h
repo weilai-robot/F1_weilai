@@ -28,7 +28,7 @@ enum class ActuatorType {
   POWER_FLOW_R52,
   POWER_FLOW_L28,
   OMNI_PICKER,
-  ENCOS_EC_A8112,     // EC-A8112-P1-18H
+  ENCOS_EC_A8116,     // EC-A8116-P1-18H
   ENCOS_EC_A4315,     // EC-A4315-P2-36
   UNKOWN,
 };
@@ -38,7 +38,7 @@ static ActuatorType StringToType(std::string type) {
   if (type == "POWER_FLOW_R52") return ActuatorType::POWER_FLOW_R52;
   if (type == "POWER_FLOW_L28") return ActuatorType::POWER_FLOW_L28;
   if (type == "OMNI_PICKER") return ActuatorType::OMNI_PICKER;
-  if (type == "ENCOS_EC_A8112" || type == "EC-A8112-P1-18H") return ActuatorType::ENCOS_EC_A8112;
+  if (type == "ENCOS_EC_A8116" || type == "EC-A8116-P1-18H") return ActuatorType::ENCOS_EC_A8116;
   if (type == "ENCOS_EC_A4315" || type == "EC-A4315-P2-36") return ActuatorType::ENCOS_EC_A4315;
   return ActuatorType::UNKOWN;
 }
@@ -119,10 +119,10 @@ struct MitParam {
       .kd_max = 8.0f,                 \
   }
 
-// EC-A8112-P1-18H: TOR ±130 N·m, CUR ±70 A, Kt 2.34 N·m/A
+// EC-A8116-P1-18H: TOR ±130 N·m, CUR ±70 A, Kt 2.34 N·m/A
 // (bench-queried 2026-11-09, doc/电机参数.txt; NOTE: differs from
 // HW-SPEC-0005 §2.3 which records ±90/±60/2.1 — spec row pending update)
-#define ENCOS_EC_A8112_MIT_PARAM \
+#define ENCOS_EC_A8116_MIT_PARAM \
   {                              \
       .pos_min = -12.5f,         \
       .pos_max = 12.5f,          \

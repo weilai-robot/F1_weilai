@@ -20,7 +20,7 @@ namespace xyber_encos {
 class EncosMotor : public xyber::Actuator {
  public:
   /**
-   * @param type ENCOS_EC_A8112 / ENCOS_EC_A4315 (same CAN protocol)
+   * @param type ENCOS_EC_A8116 / ENCOS_EC_A4315 (same CAN protocol)
    * @param name actuator name
    * @param motor_id CAN id written into Motor_Msg.id
    * @param passage PDO slot in [1, 6]

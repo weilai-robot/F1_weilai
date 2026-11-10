@@ -43,7 +43,7 @@ F1 人形机器人以智元 X1 为主要技术参考与硬件基础，目标是�
 
 1. **保留** `body` DCU（上肢继续使用原 PowerFlow 路径）；
 2. **替换** `hip` DCU：下肢与腰部改用 Encos EtherCAT 开发板（对齐 `soem_demo_cpp` 协议栈）；
-3. **替换** 下肢与腰部电机为 Encos 电机（EC-A8112 / EC-A4315 等）；
+3. **替换** 下肢与腰部电机为 Encos 电机（EC-A8116 / EC-A4315 等）；
 4. **统一** 上层控制语义：`/joint_cmd`、`/joint_states` 接口不变，执行器层统一暴露 `SetMitCmd()` / `GetPosition()` / `GetVelocity()` / `GetEffort()`；
 5. **满足** F1 实时指标：1kHz 控制频率、DC 同步、周期抖动 ≤ ±50μs、WKC 稳定。
 
@@ -119,7 +119,7 @@ Encos EtherCAT 开发板基于 SSC（EtherCAT Slave Stack Code）+ ESC 芯片（
 
 | 型号 | 用途示例 |
 |------|----------|
-| `ENCOS_EC_A8112`（EC-A8112-P1-18H） | 髋、膝等大关节 |
+| `ENCOS_EC_A8116`（EC-A8116-P1-18H） | 髋、膝等大关节 |
 | `ENCOS_EC_A4315`（EC-A4315-P2-36） | 踝、腰等小关节 |
 
 ### 3.3 双协议对比
