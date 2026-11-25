@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>通信层问题回复</title>
+  <!-- ============================================================
+    ✏️ 编辑说明（两种编辑方式，任选）
+    1) 浏览器内编辑：点右上「进入编辑模式」→ 任意文字可点击修改，
+       改完点「导出 HTML」把修改后的完整文件下载下来，替换本文件即可。
+       注意：浏览器内的改动不会跨刷新保留，导出才算真正保存。
+    2) 源码编辑（VSCode 直接改）：所有可编辑的正文都带 data-edit 属性，
+       全文搜索 data-edit 或「✏️ 编辑区」注释即可定位。
+       待讨论的结论写在 class="todo" 的虚线框里（搜索 结论待补）。
+    ============================================================ -->
+  <style>
+    /* 设计计划：与桌面审查报告 index.html 同一视觉体系的回复文档。
+       色：沿用审查报告的墨青/纸灰系 + 青=已确认 / 蓝=部分或已答复 / 琥珀=待讨论 / 红=未修复。
+       型：正文系统中文黑体，代码用等宽；无外部资源。
+       局：全量状态表 + 三个部分（已修复 / 六问回复 / 其余未修复）；未定结论留虚线待补框。 */
+    :root{
+      --ink:#173146;--muted:#5b7180;--paper:#f0f5f7;--line:#d6e2e8;
+      --blue:#3568b7;--blue-bg:#edf3fc;--teal:#167f79;--teal-bg:#e9f5f1;
+      --amber:#956018;--amber-bg:#fff4df;--red:#bb493d;--red-bg:#fcf0ec;
+      --card:#ffffff;
+      --body:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+      --mono:"SFMono-Regular",Consolas,"Liberation Mono",monospace;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.8 var(--body);-webkit-font-smoothing:antialiased}
+    .wrap{width:min(920px,calc(100% - 48px));margin:auto}
+    @media(max-width:560px){.wrap{width:calc(100% - 32px)}}
+
+    /* 编辑模式 */
+    .toolbar{position:sticky;top:0;z-index:20;background:rgba(240,245,247,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+    .toolbar .wrap{display:flex;align-items:center;gap:8px;height:52px;flex-wrap:wrap}
+    .toolbar .hint{font-size:11px;color:var(--muted);margin-left:auto}
+    .toolbar button{font:12px var(--body);color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:5px;padding:6px 12px;cursor:pointer}
+    .toolbar button:hover{background:var(--blue-bg);border-color:#c9d9f1}
+    .toolbar button.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+    .toolbar button.primary:hover{background:#2c58a0}
+    .editing [data-edit]{outline:1.5px dashed #9db6c4;outline-offset:3px;border-radius:3px;cursor:text;min-height:1em}
+    .editing [data-edit]:hover{outline-color:var(--blue)}
+    .editing [data-edit]:focus{outline:2px solid var(--blue);background:var(--blue-bg)}
+
+    .head{background:#193649;color:#f2f7fa;padding:34px 0 30px}
+    .head .eyebrow{font:12px/1.6 var(--mono);letter-spacing:2px;color:#a8c1cf;text-transform:uppercase}
+    .head h1{font-size:26px;line-height:1.4;margin:8px 0 10px;font-weight:650;letter-spacing:-.5px}
+    .head p{margin:0;font-size:14px;color:#c1d2dd;max-width:640px}
+    .head .chips{margin-top:16px;display:flex;flex-wrap:wrap;gap:8px}
+    .head .chip{border:1px solid #4a6676;border-radius:4px;padding:2px 9px;font-size:11px;color:#c6d9e5}
+
+    .premise{background:var(--card);border:1px solid var(--line);border-top:3px solid var(--blue);border-radius:0 0 8px 8px;padding:18px 24px;margin-bottom:26px}
+    .premise strong{display:block;font-size:14px;margin-bottom:6px}
+    .premise p{margin:0;font-size:13px;color:var(--muted)}
+
+    .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin:0 0 14px}
+    .legend span{display:inline-flex;align-items:center;gap:6px}
+    .dot{width:7px;height:7px;border-radius:50%;display:inline-block}
+
+    .part{margin:34px 0 14px;padding-bottom:8px;border-bottom:2px solid var(--ink);display:flex;align-items:baseline;gap:12px}
+    .part .no{font:12px var(--mono);color:var(--muted);letter-spacing:2px}
+    .part h2{font-size:19px;margin:0;font-weight:650}
+    .part p{margin:0;font-size:12px;color:var(--muted)}
+
+    .badge{display:inline-flex;align-items:center;font-size:11px;line-height:1.6;padding:3px 9px;border:1px solid;border-radius:4px;white-space:nowrap}
+    .badge.teal{color:var(--teal);border-color:#c8e2d8;background:var(--teal-bg)}
+    .badge.amber{color:var(--amber);border-color:#e9d2a6;background:var(--amber-bg)}
+    .badge.blue{color:var(--blue);border-color:#c9d9f1;background:var(--blue-bg)}
+    .badge.red{color:var(--red);border-color:#edc3bb;background:var(--red-bg)}
+
+    .table-card{background:var(--card);border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-bottom:8px}
+    .table-scroll{overflow-x:auto}
+    table{border-collapse:collapse;width:100%;min-width:700px;font-size:13px}
+    th,td{text-align:left;padding:9px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+    th{font-size:11px;color:var(--muted);font-weight:600;letter-spacing:1px;white-space:nowrap}
+    tr:last-child td{border-bottom:0}
+    td.no{font-family:var(--mono);color:var(--muted);white-space:nowrap}
+    td .ref{font:11px var(--mono);color:var(--blue);white-space:nowrap}
+
+    .card{background:var(--card);border:1px solid var(--line);border-radius:8px;margin-bottom:20px;overflow:hidden}
+    .qhead{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:18px 26px 12px;border-bottom:1px solid var(--line)}
+    .qhead h2{font-size:17px;margin:0 0 2px;font-weight:650;line-height:1.5}
+    .qno{font:12px var(--mono);color:var(--muted);letter-spacing:1px}
+    .qbody{padding:14px 26px 20px}
+    .recall{font-size:13px;color:var(--muted);margin:0 0 12px;padding:8px 14px;background:var(--paper);border-left:3px solid var(--line)}
+    .qbody h3{font-size:13px;color:var(--blue);letter-spacing:1px;margin:14px 0 6px;font-weight:650}
+    .qbody h3.first{margin-top:0}
+    .qbody p{margin:6px 0;font-size:14px}
+    .qbody ol,.qbody ul{margin:6px 0;padding-left:22px;font-size:14px}
+    .qbody li{margin:4px 0}
+    .loc{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 0}
+    .loc code{font:12px/1.9 var(--mono);background:var(--blue-bg);color:var(--blue);border:1px solid #c9d9f1;border-radius:4px;padding:1px 8px}
+    .amber-box{margin-top:12px;background:var(--amber-bg);border:1px solid #e9d2a6;border-radius:6px;padding:12px 16px}
+    .amber-box strong{color:var(--amber)}
+    .amber-box p{margin:4px 0;font-size:13px}
+    .todo{margin-top:12px;border:1.5px dashed #e9d2a6;border-radius:6px;padding:12px 16px}
+    .todo strong{color:var(--amber)}
+    .todo p{margin:4px 0;font-size:13px;color:var(--muted)}
+    .todo .slot{margin-top:6px;border-bottom:1.5px dashed #e9d2a6;min-height:26px}
+    .todo .slot:empty::before{content:"（点击此处填写结论）";font-size:12px;color:#c0a96e}
+    .verdict{margin-top:12px;background:var(--teal-bg);border:1px solid #c8e2d8;border-radius:6px;padding:10px 16px}
+    .verdict strong{color:var(--teal)}
+    .verdict p{margin:2px 0;font-size:13px}
+
+    .foot{border-top:1px solid var(--line);margin-top:34px;padding:18px 0 34px;font-size:11px;color:var(--muted)}
+    .foot p{margin:2px 0}
+    @media print{
+      body{background:white;font-size:12px}
+      .toolbar{display:none}
+      .head{background:white;color:var(--ink);padding:10px 0}
+      .head .eyebrow{color:var(--muted)}
+      .head p,.head .chip{color:var(--ink);border-color:var(--line)}
+      .card,.table-card,.premise{break-inside:avoid}
+    }
+  </style>
+</head>
+<body class="">
+  <div class="toolbar">
+    <div class="wrap">
+      <button id="btn-edit" class="primary" type="button">进入编辑模式</button>
+      <button id="btn-export" type="button">导出 HTML</button>
+      <span class="hint">编辑模式下点击任意文字直接修改；改动用「导出 HTML」保存到文件，刷新不保留</span>
+    </div>
+  </div>
+
+  <header class="head">
+    <div class="wrap">
+      <div class="eyebrow">F1 WEILAI · DEPLOYMENT REVIEW · REPLY</div>
+      <h1>通信层问题回复</h1>
+      <p data-edit="">对部署审查报告（index.html）的全部 12 项发现逐条给出通信层视角的回复：已修复的直接写明，六个提问逐条作答，其余未修复项留待补框——讨论清楚后再填写结论。</p>
+      <div class="chips"><span class="chip">回复人：通信层负责人</span><span class="chip">依据 main@344c163</span><span class="chip">2026-11-23</span></div>
+    </div>
+  </header>
+
+  <main id="doc">
+    <div class="wrap">
+      <div class="legend" style="margin-top:22px">
+        <span><i class="dot" style="background:var(--teal)"></i>已修复</span>
+        <span><i class="dot" style="background:var(--blue)"></i>部分修复 / 方案已确认待实施</span>
+        <span><i class="dot" style="background:var(--amber)"></i>待讨论</span>
+        <span><i class="dot" style="background:var(--red)"></i>未修复</span>
+      </div>
+
+      <!-- ✏️ 编辑区 · 全量状态表（审查报告 12 项发现的当前状态） -->
+      <div class="table-card"><div class="table-scroll"><table>
+        <tbody><tr><th>审查编号</th><th>发现</th><th>当前状态</th><th>详见</th><th>下一步</th></tr>
+        <tr><td class="no">01</td><td data-edit="">启动发送缺少安全边界（注册后全零帧循环发送）</td><td data-edit=""><span class="badge blue">代码已改 · 待实机验证</span></td><td class="no">问题 3</td><td data-edit="">实机验证 dlc=0 空槽跳过（R-601 对齐）后闭环</td></tr>
+        <tr><td class="no">02</td><td data-edit="">使能仅本地状态，失能后命令无门控</td><td data-edit=""><span class="badge blue">代码已改 · 待实机验证</span></td><td class="no">问题 2</td><td data-edit="">实机验证使能超时停机 / 失能拒绝命令路径；发现 09① 已一并落地</td></tr>
+        <tr><td class="no">03</td><td data-edit="">IMU 来源 hip 不存在，返回全零四元数仍进姿态观测</td><td data-edit=""><span class="badge blue">分支已修复 · 待合并验证</span></td><td class="no">第三部分</td><td data-edit="">test/f1-comm-verify 已接通 IMU 链路（hip→body），合并后闭环</td></tr>
+        <tr><td class="no">04</td><td data-edit="">型号区分与物理量（共用默认量程、电流当力矩）</td><td data-edit=""><span class="badge teal">已修复</span></td><td class="no">第一部分</td><td data-edit="">同步 HW-SPEC-0005 规格行</td></tr>
+        <tr><td class="no">05</td><td data-edit="">整机模型与策略仍沿用旧 X1（ONNX 逐字节相同）</td><td data-edit=""><span class="badge red">未修复（算法层）</span></td><td class="no">第三部分</td><td data-edit="">新整机模型 + 策略适配</td></tr>
+        <tr><td class="no">06</td><td data-edit="">踝关节 kp/kd 直拷两电机，等效刚度成倍放大</td><td data-edit=""><span class="badge amber">待讨论</span></td><td class="no">问题 4</td><td data-edit="">与算法同事对齐修法 A / B</td></tr>
+        <tr><td class="no">07</td><td data-edit="">膝 kd=10 被主站按 0~5 量程截断</td><td data-edit=""><span class="badge teal">已修复</span></td><td class="no">问题 1</td><td data-edit="">kd_max=5 为实机查询确认值；kd=10 超限是否调整属控制层决定</td></tr>
+        <tr><td class="no">08</td><td data-edit="">RL 目标无机械限位，命令消息缺长度/有限值校验</td><td data-edit=""><span class="badge red">未修复</span></td><td class="no">第三部分</td><td data-edit="">校验通信层可做；限位数值需算法提供</td></tr>
+        <tr><td class="no">09</td><td data-edit="">反馈保留旧缓存重打时间戳，无 ID / 新鲜度校验</td><td data-edit=""><span class="badge amber">09① 已落地 · ②③ 暂缓</span></td><td class="no">问题 5</td><td data-edit="">数据年龄/运行期超时暂缓实施（2026-11-24），方案要点已存档待重启</td></tr>
+        <tr><td class="no">10</td><td data-edit="">默认入口不加载 ControlModule，但驱动默认使能</td><td data-edit=""><span class="badge teal">方案已确认 · 待实施</span></td><td class="no">第三部分</td><td data-edit="">拆分联调 / 整机运行配置</td></tr>
+        <tr><td class="no">11</td><td data-edit="">腰 pitch 方向 +1 与 F1 真机标定记录 −1 不一致</td><td data-edit=""><span class="badge amber">待实物确认</span></td><td class="no">第三部分</td><td data-edit="">实物标定后改一行配置</td></tr>
+        <tr><td class="no">12</td><td data-edit="">实时调度静默失效（判错 bug + 权限不足）</td><td data-edit=""><span class="badge blue">分支已修复 · 待合并验证</span></td><td class="no">问题 6</td><td data-edit="">test/f1-comm-verify 已实现四项修复 + RT 门禁体系，合并后闭环；发布线程 RT 为遗留项</td></tr>
+      </tbody></table></div></div>
+
+      <!-- ================================================================
+           ✏️ 编辑区 · 第一部分：已修复
+      ================================================================= -->
+      <div class="part"><span class="no">PART 1</span><h2>已修复</h2><p>已合入 main 的修复，含 commit 号。</p></div>
+
+      <section class="card">
+        <div class="qhead"><div><div class="qno">审查发现 04</div><h2>型号区分与物理量</h2></div><span class="badge teal">已修复</span></div>
+        <div class="qbody" data-edit="">
+          <ul>
+            <li><strong>型号拆分</strong>：移除泛型电机类型（dc3f215），工厂只注册 ENCOS_EC_A8116 / ENCOS_EC_A4315 两种型号</li>
+            <li><strong>按型号装载 MIT 参数</strong>：A8116 TOR ±130 / CUR ±70 / Kt 2.34；A4315 TOR ±70 / CUR ±30 / Kt 2.8——均为 2026-11-09 实机查询值（8f0664b），见 common_type.h:125-159。</li>
+            <li><strong>物理量修正</strong>：反馈电流经 Kt 换算为输出力矩（N·m），不再直接把电流当 effort 用（encos_motor.cpp GetEffort）。</li>
+          </ul><div class="verdict"><strong>结论：已闭环</strong><p>通信层的型号与物理量问题全部落地，仅剩规格文档同步。</p></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="qhead"><div><div class="qno">审查发现 07</div><h2>量程对齐（含 KD）</h2></div><span class="badge teal">已修复</span></div>
+        <div class="qbody" data-edit="">
+          <p>报告指出「主站量程与仓库规格冲突、需实物核对」的部分已按实机修正：TOR / CUR / Kt 与 <strong>KD 量程均已按实机查询值落地</strong>——2026-11-09 对两型号各一台实机查询，PVT_KD 范围均为 0 ~ 5（doc/电机参数.txt，605dabd 存证），主站 kd_max=5 与电机固件当前配置一致。</p>
+          <p>因此膝 kd=10 被截为 5 不是缺陷：配置值超出了电机实际量程，钳位是 MIT 编码的正确行为。若控制侧确需 kd &gt; 5，需在电机端把 KD 量程配置改大（手册 §9.2.5 支持配置，当前为 0~5）——属控制层 / 固件配置的决定，通信层不擅自放宽。详细答复见下方<strong>问题 1</strong>。</p>
+        </div>
+      </section>
+
+      <!-- ================================================================
+           ✏️ 编辑区 · 第二部分：六问回复
+      ================================================================= -->
+      <div class="part"><span class="no">PART 2</span><h2>六个提问的回复</h2><p>已确认的直接写结论；未对齐的留待补框。</p></div>
+
+      <section class="card">
+        <div class="qhead"><div><div class="qno">问题 1 · 对应审查发现 07</div><h2>膝阻尼 kd=10 被压成 5</h2></div><span class="badge blue">行为已答复 · kd_max=5 已实机核实</span></div>
+        <div class="qbody">
+          <div class="recall" data-edit="">配置里给膝盖写的阻尼是 10，发送前被软件按「最大 5」压成了 5。</div>
+          <div data-edit="">
+            <h3 class="first">已确认的答复</h3>
+            <ul>
+              <li><strong>配置归属</strong>：kd=10 写在 rl_x1.yaml:242-243（rl_walk_leg 控制器的 damping 表，膝为第 4 项），属于<strong>控制层参数配置</strong>，但是在通信层（encos_motor.cpp:306-316） 对全部 MIT 字段「先钳位、再编码」，所以即使kd配置为10，也会收缩为5进行下发。</li>
+              </ul>
+            <div class="verdict"><strong>kd_max=5 为实机查询确认值，钳位行为正确</strong>
+              <p>2026-11-09 实机查询记录（doc/电机参数.txt，605dabd 存证）：两型号模组的 PVT_KD 范围均为 0 ~ 5，主站量程与固件当前配置一致。kd=10 超出量程被钳为 5，落地值即 5。</p>
+              <p>若控制侧确需 kd &gt; 5，需在电机端把 KD 量程配置改大（手册 §9.2.5 支持配置）——属控制层 / 固件配置决定，通信层不擅自放宽。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="qhead"><div><div class="qno">问题 2 · 对应审查发现 02</div><h2>「使能」是假装的</h2></div><span class="badge blue">代码已改 · 待实机验证</span></div>
+        <div class="qbody">
+          <div class="recall" data-edit="">Encos 电机没有使能命令，现有代码把使能做成空操作（本地记状态、无反馈也返回成功）。后续怎么修？</div>
+          <div data-edit="">
+            <h3 class="first">确认采用的方案（已实施 2026-11-24）：不跳过，把使能重定义为「准入门槛」</h3>
+            <ol>
+              <li><strong>使能 = 证明在线 + 进入零力矩保持</strong>：EnableActuator 的成功条件改为「超时时间内收到该电机的有效反馈帧（证明总线通、电机在线）+ 下发零力矩 MIT 保持帧」；收不到就返回 false，上层 InitDcu 现有的 THROW 会直接停机。实施时「有效反馈帧」定义为 <strong>state_msg_-&gt;id == id_ 的逐电机反馈帧</strong>（0x7FF 广播应答除外）——该判定同时是审查发现 09①，本次一并落地。</li>
+              <li><strong>失能 = 拒绝命令</strong>：SetMitCmd 入口增加门控——power_state_ 为 DISABLE 时不接受运动命令、不写帧，发送槽保持现状（与问题 3 修订衔接：从未激活的电机保持静默 dlc=0，使能后失能的电机保持零力矩保持帧）。</li>
+              <li><strong>接口不变</strong>：对外 enable / disable 调用形式不变；对 Encos 的语义由「固件使能位」变为「主站准入控制」。</li>
+            </ol>
+            <div class="loc"><code>encos_motor.cpp · RequestState/GetPowerState/SetMitCmd/UpdateFeedback</code><code>encos_motor.cpp · WriteMitCmd（无门控内部写入）</code><code>encos_slave.cpp · EnableActuator（结构不变）</code></div>
+            <div class="verdict"><strong>结论：代码已实施 · 待实机验证</strong><p>实现要点：RequestState(ENABLE) 只写零力矩保持 + 置 pending，不再本地置位；UpdateFeedback 收到有效帧（id == id_）且 pending 时直接升 ENABLE（经用户确认的简化：不设独立证据变量，裁决随解析发生，GetPowerState 退化为纯 getter；当前启动时序下与轮询裁决零行为差异）；SetMitCmd 在 DISABLE 态拒绝运动命令（RequestState 经 WriteMitCmd 内部写入绕过门控，避免自锁）。待验证：使能超时→停机路径、失能后命令被拒、正常使能时延≈反馈到达。已知边界：SetEffort/SetVelocity/SetPosition 三条运动命令路径暂未门控（当前控制器不调用）。</p></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="qhead"><div><div class="qno">问题 3 · 对应审查发现 01</div><h2>上电就发错误命令（P0）</h2></div><span class="badge blue">代码已改 · 待实机验证</span></div>
+        <div class="qbody">
+          <div class="recall" data-edit="">「上电发错命令」是什么意思？注册时发全 0，怎么修？是不是换成全 0 力矩的帧？</div>
+          <div data-edit="">
+            <h3 class="first">确认采用的方案（2026-11-24 修订）：注册后不发帧（dlc=0 静默），使能时才激活槽位</h3>
+            <ul>
+              <li><strong>问题成因</strong>：注册电机时（SetDataFiled）往发送槽写的是 data 全 0 的帧（id/dlc=8 预武装）；总线一进 OP 就开始每 1ms 循环外发。MIT 帧是无符号码值，<strong>全 0 字节 ≠ 零力矩</strong>——0 码值解码为量程最小值（A8116 即 −130 N·m），电机持续收到大负力矩命令。enable_actuator=false 时这个错误帧会永远发下去。</li>
+              <li><strong>修法</strong>：SetDataFiled 只绑定指针并保持 memset 全零（dlc=0），删除 id/dlc=8 预置——板端按 R-601 全 6 槽扫描、dlc==0 空槽跳过（4fb775b 对齐 demo 板），注册到第一次写帧前总线完全无该电机帧。第一次有意写帧来自使能路径：RequestState(ENABLE) → SetMitCmd 零力矩保持帧（kp=0 / kd=0 / toq=0），从下一拍起 1kHz 重放；失能路径同样写零力矩保持帧。所有写帧路径（SetMitCmd / WriteCurTorCmd / SetHomingPosition）均自行重写 id/rtr/dlc，不依赖注册预置。</li>
+              <li><strong>备选方案（降级保留）</strong>：原「注册时预置中点码值零力矩帧」（12 位力矩场 ≈ 2047/4095，位置场 0x7FFF）——若需要 enable_actuator=false 时被动监测腿关节反馈（静默则反馈槽无数据，joint_state 发布全零），或规范要求「注册即受控空力矩」，回退此方案。</li>
+              <li><strong>待验证</strong>：实机确认 dlc=0 槽不产生 CAN 帧（示波器 / CAN 盒，R-601 对齐验证）；代码在 Linux 目标环境编译。</li></ul>
+            <div class="loc"><code>encos_motor.cpp:39-55 · SetDataFiled</code><code>encos_motor.cpp · RequestState/SetMitCmd 零力矩保持</code><code>encos_slave_fw_impl_spec.zh_CN.md · R-601</code></div>
+            <div class="verdict"><strong>结论：方案修订已确认（2026-11-24）</strong><p>主修改为「不发帧（dlc=0）静默」：安全不依赖预置编码正确性，实现为删代码，与问题 2「准入门槛」（使能=第一次有意写帧）同一不变量。</p></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="qhead"><div><div class="qno">问题 4 · 对应审查发现 06</div><h2>踝关节刚度成倍放大</h2></div><span class="badge amber">待讨论</span></div>
+        <div class="qbody">
+          <div data-edit="">
+            <h3 class="first">已确认的定位：是 transmission 的换算缺失</h3>
+            <p>踝并联传动里，<strong>位置和力矩都做了雅可比换算，唯独 kp/kd 原样直拷</strong>——关节空间的增益被当成电机空间增益发给了两台电机，经机构叠加后等效关节刚度是配置值的数倍且随姿态变化。换算代码在驱动层传动映射里，属于驱动/算法的边界问题。</p><div class="loc"><code>ankle_transmission.cc:418-425 · 左踝 kp/kd 直拷</code><code>ankle_transmission.cc:758-765 · 右踝 kp/kd 直拷</code><code>lumbar / wrist 同样直拷</code></div><br><div class="todo"><strong>结论：transmission层如何修改还需再讨论</strong><p><br></p>
+              <div class="slot"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="qhead"><div><div class="qno">问题 5 · 对应审查发现 09</div><h2>反馈数据「装新鲜」</h2></div><span class="badge blue">Encos 侧方案已明确 · 架构级待讨论</span></div>
+        <div class="qbody">
+          <div class="recall" data-edit="">Encos 新代码叠加的问题该怎么解决？</div>
+          <div data-edit="">
+            <h3 class="first">新鲜度问题的通俗解释</h3>
+            <ul>
+              <li><strong>正常时</strong>：电机每毫秒回一帧状态，控制器拿最新帧算下一步。</li>
+              <li><strong>反馈断了之后</strong>：软件收不到新帧，但不清掉旧数据，继续沿用最后一次的值，并且每毫秒盖一个「当前时间」戳——下游看时间戳是新的，以为数据实时。</li><li><strong>归属</strong>：重打时间戳、无超时这套机制是<strong>原 x1-infer 就有的</strong>，上肢（DCU）与下肢（Encos）都受影响；Encos 新代码又叠加两个特有问题——dlc=0 时保留旧缓存（encos_motor.cpp:71）、除 0x7FF 外不校验帧 ID 是否属于本电机（encos_motor.cpp:74-88）。DCU 槽位按位置切分不会串台，Encos 槽内是带 CAN ID 的帧，有串台风险，所以<strong>下肢风险面更大</strong>。</li>
+            </ul>
+            <h3>Encos 侧修复方案（通信层职责内，已明确）</h3>
+            <ol>
+              <li>UpdateFeedback 校验 state_msg_-&gt;id == id_，非本电机的帧不解析。</li>
+            </ol>
+            <div class="todo"><strong>结论：新鲜度问题暂缓实施（2026-11-24）</strong>
+              <p>① Encos 侧数据年龄 / 运行期超时处置（发现 09②③）暂不实施，维持现状——含 x1-infer 原有的重打时间戳机制；② 09① id 校验已随问题 2 落地（commit 9f632f4）；③ 架构级时间戳 / 超时机制后续再议。方案要点（含陈旧检测难点与板卡计数器 / 主站启发式两案）已存档 OpenViking 笔记，重启时直接取用。</p>
+              <div class="slot"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="qhead"><div><div class="qno">问题 6 · 对应审查发现 12</div><h2>实时调度静默失效</h2></div><span class="badge blue">分支已修复 · 待合并验证</span></div>
+        <div class="qbody">
+          <div class="recall" data-edit="">是原有 x1-infer 的问题，目前代码能正常跑，是否修改还需再确认。</div>
+          <div data-edit="">
+            <h3 class="first">已确认的事实（代码位置）</h3>
+            <ul>
+              <li><strong>判错 bug</strong>：comm_utils.cpp:53 用 &lt; 0 判断 pthread_setschedparam 失败——pthread 失败返回<strong>正数</strong>错误码，永远不会小于 0，所以设置失败也会打出成功日志。</li>
+              <li><strong>调用点</strong>：ethercat_manager.cpp:341（EtherCAT 周期线程），参数来自 dcu_x1.yaml:82-83（优先级 90 / 绑核 9）。</li>
+              <li><strong>权限不足</strong>：run.sh:11 只给了 cap_net_raw=ep；SCHED_FIFO 需要 CAP_SYS_NICE，实际返回 EPERM，再被上面的判错 bug 吞掉。</li>
+              <li><strong>未配置的线程</strong>：发布线程（dcu_driver_module.cc:67）、命令回调、控制主循环、ONNX 推理线程都没有配实时调度。</li>
+            </ul><div class="todo"><strong>结论：test/f1-comm-verify 分支已实现修复（2026-11-24 调研，自 Humanoid_motion 移植），合并后闭环</strong>
+              <p>四项修复（对应上方四个事实）：① 判错 bug comm_utils.cpp 判据 &lt;0→!=0（a8b3fa0）；② WorkLoop 检查 SetRealTimeThread 返回值、失败 ERROR 告警不再静默（5de58aa）；③ control_module 增 rt_priority/bind_cpu 配置（rl_x1.yaml 80 / CPU6），rl_control_pub 主循环进 SCHED_FIFO+隔离核（ea2909b）；④ ONNX 线程限制 inter/intra_op_threads（yaml 可配默认 1）+ allow_spinning=0 禁自旋（6592df5）。</p>
+              <p>门禁体系（把"启动后确认实时性"自动化）：rt_perm_check.sh 启动前 RT 资格预检（root / cap_sys_nice / rtprio 限额三判据，权限不足显式拒绝上电）；f1-rt-verify.service 开机全量验收产出 /run 凭证 + rt_gate_check.sh 网口/CPU 活体门禁；rt_verify.sh 启动后逐线程核 comm/cls/rtprio/psr（专治线程名在但 cls=TS 的假实时）；run_main.sh preflight 三路预检→拉起→验证→SIGTERM 转发（保证 Shutdown 下使能）。</p>
+              <p>遗留与合并：发布线程（PublishLoop）仍未配 RT；分支基于 344c163 分叉，与 main 互补可合并（x1_cfg.yaml 同行同改自动合并）。</p>
+              <div class="slot"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================
+           ✏️ 编辑区 · 第三部分：其余未修复发现（六问之外）
+      ================================================================= -->
+      <div class="part"><span class="no">PART 3</span><h2>其余未修复发现</h2><p>六问之外、审查报告中仍未修复的项，附一句话现状与归属；备注栏可自行填写。</p></div>
+
+      <section class="card">
+        <div class="qhead"><div><div class="qno">审查发现 03</div><h2>IMU 来源 hip 不存在</h2></div><span class="badge blue">分支已修复 · 待合并验证</span></div>
+        <div class="qbody" data-edit="">
+          <p>配置 imu_dcu_name 仍是 hip，而当前拓扑 body / waist / left_leg / right_leg <strong>全部 imu_enable: false</strong>——等于没有任何 IMU；找不到来源时返回全零四元数照常发布，RL 用零姿态观测。</p><div class="verdict"><strong>结论：test/f1-comm-verify 分支已修复，合并后闭环（2026-11-24 调研）</strong><p>修复内容：dcu_x1.yaml imu_dcu_name hip→body + body DCU imu_enable:true（/imu/data 全零修复，imu-only 分支预验证通过），随网口 eno1→enp2s0、绑核 9→4 适配 X1 实时优化机一并落地（commit c9d2568 / a62ad4e）。分支基于 344c163 分叉，与 main 互补可合并。</p></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="qhead"><div><div class="qno">审查发现 05</div><h2>整机模型与策略仍是旧 X1</h2></div><span class="badge red">未修复（算法层）</span></div>
+        <div class="qbody" data-edit="">
+          <p>两份行走 ONNX 与 F1 存档<strong>逐字节相同</strong>（SHA256 一致），下肢 MJCF 自项目初始化以来未改——新硬件的动力学与执行器约束完全没进模型。</p>
+          <p><strong>归属</strong>：算法层 / 模型资产，不在通信层范围。工作量最大，放在其它修复稳定之后做；通信层在新模型联调时提供协议量程与执行器约束的支持。</p>
+          <div class="todo"><strong>结论：这个问题如何解决需再讨论</strong><div class="slot"></div></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="qhead"><div><div class="qno">审查发现 08</div><h2>无机械限位，消息校验不完整</h2></div><span class="badge red">未修复</span></div>
+        <div class="qbody" data-edit="">
+          <p>JointCmdCallback 直接按 name.size() 索引 msg 各数组（长度不足会越界）、无 isfinite 检查；RL 目标无机械限位（actions_clip=100 × scale 0.5 ≈ ±50 rad），只剩协议 ±12.5 的编码钳位兜底。</p>
+          <p><strong>拆分归属</strong>：① 数组长度 / 有限值校验——纯通信层，可随下轮一起做；② 机械限位表——限位数值需算法 / 机械侧提供，配置由通信层落地。</p>
+          <div class="todo"><strong>结论：目前Encos电机只配置了MIT量程，实际的机械限位值以及如何加限位后续还需再讨论</strong><div class="slot"></div></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="qhead"><div><div class="qno">审查发现 10</div><h2>部署入口未闭合</h2></div><span class="badge teal">方案已确认 · 待实施</span></div>
+        <div class="qbody" data-edit="">
+          <p>默认启动配置注释 ControlModule（手柄 → 控制链路断开），但驱动默认 enable_actuator: true——电机通电待命却没有正规指挥入口。</p>
+          <p><strong>建议</strong>：拆分两套启动配置——联调专用（现状）与整机运行（加载 ControlModule、默认不使能、由状态机授权）。改动在配置层，成本低。</p>
+          <div class="verdict"><strong>结论：方案已确认 · 待实施</strong><p>现有代码注释了 ControlModule 层，之后会放开注释。</p></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="qhead"><div><div class="qno">审查发现 11</div><h2>腰 pitch 方向与 F1 记录不一致</h2></div><span class="badge amber">待实物确认</span></div>
+        <div class="qbody" data-edit="">
+          <p>当前 dcu_x1.yaml 腰部 direction_right: 1.0，F1 真机标定记录为 −1（+0.10 rad 测试后修正）。若现装配与 F1 相同，命令与反馈均反向。</p>
+          <p><strong>下一步</strong>：只能实物确认——转一下腰看方向，标定后改一行配置。代码侧无法单方面拍板。</p>
+          <div class="todo"><div class="slot"><br></div></div>
+        </div>
+      </section>
+
+      <footer class="foot">
+        <p>依据仓库 main@344c163 静态核查 · 2026-11-23 · 与桌面审查报告 index.html 配套阅读。</p>
+        <p>状态图例：青 = 已修复；蓝 = 部分修复 / 方案已确认待实施；琥珀 = 待讨论或待实物；红 = 未修复。虚线框为结论待补位，可直接编辑填写。</p>
+      </footer>
+    </div>
+  </main>
+
+  <script>
+  (function () {
+    var doc = document.getElementById('doc');
+    var editBtn = document.getElementById('btn-edit');
+    var editing = false;
+
+    function setEdit(on) {
+      editing = on;
+      document.body.classList.toggle('editing', on);
+      doc.querySelectorAll('[data-edit]').forEach(function (el) {
+        if (on) { el.setAttribute('contenteditable', 'true'); }
+        else { el.removeAttribute('contenteditable'); }
+      });
+      editBtn.textContent = on ? '退出编辑模式' : '进入编辑模式';
+    }
+    editBtn.addEventListener('click', function () { setEdit(!editing); });
+
+    document.getElementById('btn-export').addEventListener('click', function () {
+      if (editing) setEdit(false);
+      var clone = document.documentElement.cloneNode(true);
+      var body = clone.querySelector('body');
+      body.classList.remove('editing');
+      clone.querySelectorAll('[contenteditable]').forEach(function (el) { el.removeAttribute('contenteditable'); });
+      var html = '<!DOCTYPE html>\n' + clone.outerHTML;
+      var blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'review-reply.html';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    });
+  })();
+  </script>
+
+
+</body></html>

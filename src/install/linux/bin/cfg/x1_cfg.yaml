@@ -48,7 +48,7 @@ aimrt:
       - path: ./libpkg1.so
         enable_modules:
           - JoyStickModule
-          # - ControlModule
+          - ControlModule
           - DcuDriverModule
     modules: # 模块
       - name: JoyStickModule

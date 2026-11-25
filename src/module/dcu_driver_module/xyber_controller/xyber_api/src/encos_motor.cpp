@@ -44,10 +44,13 @@ void EncosMotor::SetDataFiled(uint8_t* send, uint8_t* recv) {
   recv_buf_ = recv;
 
   if (cmd_msg_) {
+    // Slot starts silent: memset keeps dlc==0, so the board firmware skips
+    // this slot (fw spec R-601, demo-board aligned) and no CAN frame goes to
+    // the motor until the first deliberate write — SetMitCmd / WriteCurTorCmd
+    // / SetHomingPosition / a RequestState hold — re-arms id/rtr/dlc itself.
+    // Never pre-arm a frame here: zero MIT code values decode to the range
+    // minimum (e.g. -130 N·m on A8116), not zero torque.
     memset(cmd_msg_, 0, sizeof(xyber::Motor_Msg));
-    cmd_msg_->id = id_;
-    cmd_msg_->rtr = 0;
-    cmd_msg_->dlc = 8;
   }
 }
 
@@ -79,6 +82,21 @@ void EncosMotor::UpdateFeedback() {
       }
     }
     return;
+  }
+
+  // Per-motor frames must carry this motor's CAN id — master-side double check
+  // of the board's R-604 id routing (0x7FF broadcast handled above). Frames
+  // addressed elsewhere are neither parsed nor counted as feedback (review
+  // finding 09-1).
+  if (state_msg_->id != id_) return;
+
+  // Bus proof for the admission gate (review finding 02): the first frame
+  // addressed to this motor after an enable request completes the pending
+  // enable. power_state_ write points are exactly two: here and
+  // RequestState(DISABLE). Staleness handling is finding 09-2's scope.
+  if (enable_pending_) {
+    enable_pending_ = false;
+    power_state_ = xyber::STATE_ENABLE;
   }
 
   // Ask / response mode (comm_mode = 0): ack_status in data[0] high 3 bits
@@ -156,15 +174,20 @@ void EncosMotor::RequestState(xyber::ActautorState state) {
   if (!cmd_msg_) return;
 
   if (state == xyber::STATE_ENABLE) {
-    // Encos has no PowerFlow-style enable bit; enter MIT hold (zero cmd) and mark enabled.
-    SetMitCmd(position_, 0.0f, 0.0f, 0.0f, 0.0f);
-    power_state_ = xyber::STATE_ENABLE;
+    // Encos has no PowerFlow-style enable bit. The request = write a
+    // zero-torque MIT hold (the first deliberate write on a silent slot) and
+    // wait for bus proof: UpdateFeedback promotes to ENABLE on the first
+    // valid per-motor feedback frame (review finding 02 admission gate —
+    // "enable" succeeds only when the bus is alive and the motor is online).
+    WriteMitCmd(position_, 0.0f, 0.0f, 0.0f, 0.0f);
+    enable_pending_ = true;
     return;
   }
 
   if (state == xyber::STATE_DISABLE) {
     // Full brake would be 0x03 ctrl_status=2; prefer zero-torque MIT hold.
-    SetMitCmd(position_, 0.0f, 0.0f, 0.0f, 0.0f);
+    WriteMitCmd(position_, 0.0f, 0.0f, 0.0f, 0.0f);
+    enable_pending_ = false;
     power_state_ = xyber::STATE_DISABLE;
   }
 }
@@ -208,6 +231,9 @@ float EncosMotor::GetTempure() {
 }
 
 xyber::ActautorState EncosMotor::GetPowerState() {
+  // Passive getter; the enable verdict happens inside UpdateFeedback (bus
+  // proof). EnableActuator's 10 ms poll times out into InitDcu's THROW when
+  // no per-motor feedback frame ever arrives (review finding 02).
   UpdateFeedback();
   return power_state_;
 }
@@ -300,6 +326,18 @@ float EncosMotor::GetPosition() {
 void EncosMotor::SetMitCmd(float pos, float vel, float toq, float kp, float kd) {
   if (!cmd_msg_) return;
 
+  // Admission gate (review finding 02): while disabled, motion commands are
+  // refused and the send slot keeps its last state — silent (dlc==0) if never
+  // activated, zero-torque MIT hold if disabled after enable. RequestState
+  // writes the hold frame through WriteMitCmd, bypassing this gate. Note:
+  // SetEffort / SetVelocity / SetPosition are currently ungated (no controller
+  // calls them today).
+  if (power_state_ == xyber::STATE_DISABLE) return;
+
+  WriteMitCmd(pos, vel, toq, kp, kd);
+}
+
+void EncosMotor::WriteMitCmd(float pos, float vel, float toq, float kp, float kd) {
   // send_motor_ctrl_cmd — force-position hybrid (manual §2), standard frame
   mode_ = xyber::MODE_MIT;
 

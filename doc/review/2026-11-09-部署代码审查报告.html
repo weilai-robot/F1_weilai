@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>F1 部署代码审查 · X1 上肢与自研下肢</title>
+  <style>
+    :root{--ink:#173146;--muted:#5b7180;--paper:#f0f5f7;--line:#d6e2e8;--blue:#3568b7;--blue-bg:#edf3fc;--teal:#167f79;--teal-bg:#e9f5f1;--red:#bb493d;--red-bg:#fcf0ec;--amber:#956018;--amber-bg:#fff4df;--mono:"SFMono-Regular",Consolas,"Liberation Mono",monospace;--body:"PingFang SC","Microsoft YaHei",system-ui,sans-serif}
+    *{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:90px}body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.7 var(--body);-webkit-font-smoothing:antialiased}a{color:inherit;text-decoration:none}button{font:inherit;cursor:pointer}button,a,summary{touch-action:manipulation}button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid var(--blue);outline-offset:4px}button{border:1px solid var(--line);background:white;color:var(--ink);padding:8px 15px;border-radius:5px}button:hover{background:var(--blue-bg)}.wrap{width:min(1200px,calc(100% - 64px));margin:auto}.top{position:sticky;top:0;z-index:10;background:#f0f5f7f5;backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}.top .wrap{height:70px;display:flex;align-items:center;justify-content:space-between;gap:24px}.brand{font-weight:700;font-size:16px;white-space:nowrap;display:flex;align-items:center;gap:12px}.brand-mark{display:grid;place-items:center;width:32px;height:32px;border:1px solid var(--ink);font:700 14px var(--mono)}.nav{display:flex;gap:25px;color:var(--muted);font-size:13px}.nav a:hover{color:var(--blue)}.tools{display:flex;gap:8px}.tools button{font-size:12px;white-space:nowrap}.eyebrow{font:12px/1.6 var(--mono);letter-spacing:2px;color:var(--muted);text-transform:uppercase}.hero{background:#193649;color:#f2f7fa;position:relative;overflow:hidden}.hero-grid{display:grid;grid-template-columns:1.05fr 1fr;align-items:center;min-height:530px;gap:25px;padding-block:45px}.hero .eyebrow{color:#a8c1cf}.hero h1{font-size:clamp(32px,3.7vw,49px);line-height:1.3;letter-spacing:-1.5px;margin:20px 0 24px;font-weight:650}.hero h1 span{color:#90c8ed}.hero p{font-size:16px;line-height:1.9;color:#c1d2dd;max-width:430px;margin:0}.hero-meta{margin-top:35px;display:flex;flex-wrap:wrap;gap:10px}.chip{display:inline-flex;align-items:center;gap:7px;padding:3px 9px;border:1px solid var(--line);border-radius:4px;font-size:11px;line-height:1.7;white-space:nowrap}.hero .chip{border-color:#4a6676;color:#c6d9e5}.dot{width:6px;height:6px;border-radius:50%;display:inline-block;flex:none}.hero-art{width:100%;max-height:455px;display:block}.hero-art text{font-family:var(--body)}.intro-strip{display:grid;grid-template-columns:1fr 1fr 1fr;border-bottom:1px solid var(--line);background:white}.intro-item{padding:25px 30px;display:flex;gap:16px;align-items:center;border-right:1px solid var(--line)}.intro-item:last-child{border:0}.intro-item strong{font-size:15px}.intro-item p{margin:2px 0 0;font-size:12px;color:var(--muted)}.intro-icon{width:38px;height:38px;flex:none;color:var(--blue)}main{padding-block:52px 40px}.legend{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:24px}.legend p{font-size:13px;color:var(--muted);margin:0}.legend-items{display:flex;align-items:center;gap:18px;font-size:12px;flex-wrap:wrap}.legend-items span{display:flex;align-items:center;gap:7px}.panel{background:white;border:1px solid var(--line);border-radius:8px;margin-bottom:26px;overflow:hidden}.panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:22px;padding:28px 32px 20px}.heading{display:flex;align-items:flex-start;gap:18px}.section-no{font:13px var(--mono);color:var(--muted);padding-top:8px}.panel h2{font-size:24px;line-height:1.5;letter-spacing:-.5px;margin:0 0 4px;font-weight:650}.subtitle{font-size:13px;color:var(--muted);margin:0}.status{font-size:11px;padding:4px 9px;border:1px solid;white-space:nowrap;border-radius:4px}.status.red{color:var(--red);border-color:#edc3bb;background:var(--red-bg)}.status.amber{color:var(--amber);border-color:#e9d2a6;background:var(--amber-bg)}.status.blue{color:var(--blue);border-color:#c9d9f1;background:var(--blue-bg)}.panel-body{padding:0 32px 28px}.diagram-scroll{overflow-x:auto;overscroll-behavior-x:contain}.diagram{display:block;width:100%;height:auto;min-width:700px;font-family:var(--body)}.diagram text{fill:var(--ink);font-family:var(--body)}.diagram .svg-muted{fill:var(--muted)}.diagram .svg-red{fill:var(--red)}.diagram .svg-teal{fill:var(--teal)}.diagram .svg-blue{fill:var(--blue)}.diagram .svg-amber{fill:var(--amber)}.diagram .svg-mono{font-family:var(--mono)}.diagram .tiny{font-size:12px}.diagram .small{font-size:14px}.diagram .label{font-size:17px;font-weight:600}.diagram .big{font-size:25px;font-weight:650}.diagram .line{stroke:var(--line);stroke-width:1.5;fill:none}.diagram .wire{stroke:#8ca2b1;stroke-width:2;fill:none}.diagram .bad-wire{stroke:var(--red);stroke-width:2;fill:none;stroke-dasharray:6 5}.diagram .good-wire{stroke:var(--teal);stroke-width:2;fill:none}.diagram-note{font-size:12px;color:var(--muted);margin:12px 0 0;display:flex;align-items:flex-start;gap:8px}.diagram-note::before{content:"↳";color:var(--blue);font-size:16px}.segmented{display:flex;gap:4px;background:var(--paper);padding:4px;border-radius:6px;width:fit-content;margin-bottom:15px}.segmented button{font-size:12px;border:0;background:transparent;padding:7px 15px}.segmented button[aria-pressed="true"]{background:var(--ink);color:white}.signal-strip{margin-top:12px;border:1px solid var(--line);display:grid;grid-template-columns:1.1fr 1.4fr 1fr;gap:0;border-radius:5px;overflow:hidden}.signal-strip>div{padding:15px 18px;border-right:1px solid var(--line)}.signal-strip>div:last-child{border:0}.signal-strip .label{font-size:11px;color:var(--muted);margin-bottom:5px}.signal-strip strong{font-size:15px}.signal-strip code{font:12px var(--mono);word-spacing:3px}.red-text{color:var(--red)}.teal-text{color:var(--teal)}.amber-text{color:var(--amber)}.evidence{border-top:1px solid var(--line);background:#f8fafb}.evidence summary{list-style:none;cursor:pointer;padding:13px 32px;font-size:12px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:15px}.evidence summary::-webkit-details-marker{display:none}.evidence summary::after{content:"＋";font-size:17px}.evidence[open] summary::after{content:"－"}.evidence-content{padding:0 32px 22px;display:grid;gap:12px}.evidence-item{display:grid;grid-template-columns:30px 1fr;gap:12px;padding-top:13px;border-top:1px solid var(--line);font-size:12px}.evidence-item>span{font:11px var(--mono);color:var(--muted);padding-top:4px}.evidence-item strong{font-weight:600;font-size:13px}.evidence-item p{margin:4px 0;color:var(--muted)}.source{display:block;color:var(--blue);font:11px/1.7 var(--mono);overflow-wrap:anywhere;margin-top:3px}.source:hover{text-decoration:underline}.split{display:grid;grid-template-columns:1.05fr 1fr;gap:22px}.subfigure{background:var(--paper);border:1px solid var(--line);padding:20px 23px;border-radius:5px}.subfigure .mini-title{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:17px;font-size:15px;font-weight:600}.subfigure p{font-size:12px;color:var(--muted);margin:12px 0 0}.bar-chart{display:grid;gap:17px;margin-top:22px}.bar-row{display:grid;grid-template-columns:86px 1fr 68px;gap:12px;align-items:center;font-size:12px}.bar-track{height:22px;background:#dce6ec;position:relative}.bar-fill{height:100%;background:var(--red);width:var(--w);min-width:2px}.bar-fill.blue{background:var(--blue)}.bar-number{font:15px var(--mono);text-align:right}.gain-formula{margin-top:18px;font:12px var(--mono);color:var(--muted)}.clamp-flow{display:grid;grid-template-columns:1fr 28px 1fr;align-items:center;gap:9px;margin-top:25px}.clamp-box{background:white;border:1px solid var(--line);padding:13px;text-align:center}.clamp-box strong{display:block;font:30px var(--mono);line-height:1.4}.clamp-box span{font-size:11px;color:var(--muted)}.arrow{text-align:center;color:var(--muted);font-size:21px}.footnotes{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:16px}.footnotes p{font-size:12px;margin:0;color:var(--muted)}.range-strip{margin-top:22px;padding:15px 20px;background:var(--amber-bg);border:1px solid #e9d2a6;display:grid;grid-template-columns:1fr 1.15fr;gap:20px;align-items:center;font-size:12px}.range-strip strong{display:block;color:var(--amber);font-size:13px}.range-scale{display:grid;gap:7px}.range-row{display:grid;grid-template-columns:65px 1fr 65px;align-items:center;gap:10px;font:11px var(--mono)}.range-track{height:10px;background:#eedbb6}.range-fill{height:100%;background:#ba8a43}.range-fill.red{background:var(--red);width:33.333%}.deployment-grid{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);border-radius:5px;overflow:hidden}.deployment-cell{padding:21px;border-right:1px solid var(--line)}.deployment-cell:last-child{border:0}.deployment-cell .small-cap{font-size:11px;color:var(--muted);margin-bottom:13px}.deployment-cell strong{display:block;font-size:16px;line-height:1.6}.deployment-cell .state{margin-top:13px;display:flex;align-items:center;gap:7px;color:var(--red);font-size:12px}.deployment-cell p{font-size:12px;color:var(--muted);margin:8px 0 0}.roadmap{margin-top:45px}.roadmap-head{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:20px}.roadmap h2{font-size:24px;margin:0;font-weight:650}.roadmap-head p{font-size:12px;color:var(--muted);margin:0}.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.step{position:relative;padding:22px 20px 20px;border:1px solid var(--line);border-top:3px solid var(--blue);background:white;min-height:150px}.step:first-child{border-top-color:var(--red)}.step .n{font:11px var(--mono);color:var(--muted)}.step h3{font-size:16px;margin:10px 0 5px}.step p{margin:0;color:var(--muted);font-size:12px}.validation{margin-top:23px;display:grid;grid-template-columns:1fr 1fr;gap:25px;background:var(--teal-bg);border:1px solid #c8e2d8;padding:21px 24px;border-radius:5px}.validation h3{font-size:14px;color:var(--teal);margin:0 0 5px}.validation p{font-size:12px;color:var(--muted);margin:0}.validation strong{color:var(--ink);font-family:var(--mono);font-weight:600}.footer{border-top:1px solid var(--line);padding:23px 0 30px;color:var(--muted);font-size:11px}.footer .wrap{display:flex;justify-content:space-between;gap:24px}.footer code{font-family:var(--mono)}.scroll-hint{display:none}svg .dashed{stroke-dasharray:4 5}svg .white{fill:white}
+    .evidence-item>div,.subfigure{min-width:0}.evidence-item p{overflow-wrap:anywhere}
+    @media(max-width:1000px){.wrap{width:calc(100% - 40px)}.nav{gap:15px}.nav a:nth-child(3){display:none}.hero-grid{grid-template-columns:1fr 1fr;gap:0}.hero h1{font-size:37px}.hero p{font-size:14px}.panel-head{padding:24px 25px 18px}.panel-body{padding:0 25px 24px}.evidence summary{padding-inline:25px}.evidence-content{padding-inline:25px}.intro-item{padding:22px 20px}.deployment-cell{padding:18px 14px}.deployment-cell strong{font-size:14px}}
+    @media(max-width:720px){html{scroll-padding-top:76px}.wrap{width:calc(100% - 28px)}.top .wrap{height:62px;gap:10px}.brand{font-size:13px;gap:8px}.brand-mark{width:27px;height:27px;font-size:12px}.nav{display:none}.tools{gap:5px}.tools button{padding:6px 9px;font-size:11px}.hero-grid{display:flex;flex-direction:column;align-items:stretch;padding-block:34px 15px;gap:20px}.hero h1{font-size:37px;margin:14px 0 18px}.hero p{max-width:100%;font-size:14px}.hero-meta{margin-top:22px}.hero-art{max-height:375px}.intro-strip{grid-template-columns:1fr}.intro-item{padding:15px 17px;border-right:0;border-bottom:1px solid var(--line)}.intro-icon{width:28px;height:28px}.intro-item strong{font-size:13px}.intro-item p{font-size:11px}main{padding-top:28px}.legend{align-items:flex-start;flex-direction:column;margin-bottom:18px;gap:8px}.legend-items{gap:14px;font-size:11px}.panel-head{padding:21px 17px 16px;gap:9px}.heading{gap:11px}.section-no{font-size:11px;padding-top:6px}.panel h2{font-size:20px}.subtitle{font-size:12px}.status{font-size:10px;padding:3px 6px}.panel-body{padding:0 17px 20px}.diagram{min-width:720px}.scroll-hint{display:block;font-size:10px;color:var(--muted);margin:5px 0 8px}.signal-strip{grid-template-columns:1fr}.signal-strip>div{padding:10px 14px;border-right:0;border-bottom:1px solid var(--line)}.signal-strip .label{margin-bottom:3px}.signal-strip strong{font-size:13px}.evidence summary{padding:12px 17px}.evidence-content{padding:0 17px 18px}.evidence-item{gap:6px;grid-template-columns:25px 1fr}.split{grid-template-columns:1fr;gap:12px}.subfigure{padding:17px}.range-strip{grid-template-columns:1fr;gap:13px;padding:14px 16px}.footnotes{grid-template-columns:1fr;gap:8px}.deployment-grid{grid-template-columns:1fr 1fr}.deployment-cell{border-bottom:1px solid var(--line);padding:16px}.deployment-cell:nth-child(2){border-right:0}.deployment-cell:nth-child(n+3){border-bottom:0}.deployment-cell strong{font-size:14px}.steps{grid-template-columns:1fr 1fr;gap:9px}.step{padding:17px 14px;min-height:145px}.step h3{font-size:14px}.roadmap-head{align-items:flex-start;flex-direction:column;gap:7px}.roadmap h2{font-size:22px}.validation{grid-template-columns:1fr;gap:15px;padding:18px}.footer .wrap{flex-direction:column;gap:8px}.segmented button{padding:7px 12px}}
+    @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation:none!important;transition:none!important}}
+    @media print{@page{size:A4 landscape;margin:12mm}body{background:white;font-size:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact}.wrap{width:100%}.top{display:none}.hero-grid{min-height:0;padding:24px;grid-template-columns:1fr 1fr}.hero h1{font-size:32px}.hero-art{max-height:280px}.hero p{font-size:12px}.hero-meta{margin-top:18px}.intro-item{padding:15px}.intro-item strong{font-size:12px}main{padding-top:20px}.panel{break-inside:avoid;margin-bottom:15px}.panel-head{padding:17px 20px 12px}.panel-body{padding:0 20px 17px}.panel h2{font-size:20px}.diagram-scroll{overflow:visible}.diagram{min-width:0}.scroll-hint,.tools,.segmented,.evidence summary::after{display:none}.evidence summary{padding:10px 20px}.evidence-content{padding-inline:20px}.evidence[open]{break-inside:avoid}.roadmap{margin-top:25px}.steps{gap:8px}.step{min-height:130px;padding:15px}.validation{margin-top:15px}.footer{padding:15px 0}.footer .wrap{font-size:10px}.subfigure{padding:17px}.subtitle,.diagram-note,.roadmap-head p,.step p{font-size:11px}.legend{margin-bottom:15px}}
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <a class="brand" href="#overview"><span class="brand-mark">F1</span>部署代码审查</a>
+      <nav class="nav" aria-label="报告导航"><a href="#startup">启动</a><a href="#feedback">反馈</a><a href="#control">控制</a><a href="#model">模型</a><a href="#roadmap">修复顺序</a></nav>
+      <div class="tools"><button id="evidence-toggle" type="button" aria-expanded="false">展开证据</button><button id="print-button" type="button">打印 / PDF</button></div>
+    </div>
+  </header>
+  <section class="hero" id="overview">
+    <div class="wrap hero-grid">
+      <div>
+        <div class="eyebrow">F1_WEILAI / DEPLOYMENT REVIEW</div>
+        <h1>上肢沿用 X1，<br>下肢重新设计。<br><span>控制链路需要一起更新。</span></h1>
+        <p>Encos 通信与新踝关节几何已接入。<br>当前缺口集中在驱动边界、反馈、物理量和整机模型。</p>
+        <div class="hero-meta"><span class="chip">12 项发现 → 5 组示意</span><span class="chip">静态审查 + 离线复现</span><span class="chip">2026.11.09</span></div>
+      </div>
+      <svg class="hero-art" viewBox="0 0 570 475" role="img" aria-labelledby="robot-title robot-desc">
+        <title id="robot-title">X1 上肢与自研 Encos 下肢的硬件分界</title><desc id="robot-desc">上肢和腰部部分机构保留 X1。下肢采用自研机构及 Encos 模组，但部署模型和策略仍沿用旧 X1。此图仅为结构示意，不代表真实 CAD。</desc>
+        <defs><pattern id="blueprint-grid" width="28" height="28" patternUnits="userSpaceOnUse"><path d="M 28 0 L 0 0 0 28" fill="none" stroke="#315061" stroke-width=".6"></path></pattern></defs>
+        <rect x="10" y="8" width="550" height="450" fill="url(#blueprint-grid)"></rect>
+        <g stroke="#6c8d9f" stroke-width="1" fill="none"><path d="M282 24V444" stroke-dasharray="5 7"></path><path d="M85 244H485" stroke-dasharray="5 7"></path><path d="M220 438H346"></path><path d="M92 68H155M409 68H478"></path></g>
+        <g fill="none" stroke="#67b6b0" stroke-width="4" stroke-linejoin="round">
+          <rect x="263" y="44" width="40" height="43" rx="8"></rect><path d="M274 91V104M292 91V104M241 112L324 112L317 203L248 203Z"></path>
+          <path d="M235 122L204 136L190 195L170 253M329 122L360 136L374 195L394 253"></path><path d="M249 208L246 233L320 233L317 208"></path>
+          <circle cx="238" cy="124" r="11" fill="#193649"></circle><circle cx="327" cy="124" r="11" fill="#193649"></circle><circle cx="190" cy="195" r="9" fill="#193649"></circle><circle cx="374" cy="195" r="9" fill="#193649"></circle><path d="M166 257L160 270L173 273M399 257L405 270L392 273"></path>
+        </g>
+        <g fill="none" stroke="#87b8ed" stroke-width="5" stroke-linejoin="round">
+          <path d="M256 251L247 326L236 404M308 251L317 326L330 404"></path><path d="M230 409L217 425L253 425M336 409L348 425L312 425"></path>
+          <circle cx="256" cy="250" r="13" fill="#193649"></circle><circle cx="308" cy="250" r="13" fill="#193649"></circle><circle cx="247" cy="326" r="12" fill="#193649"></circle><circle cx="317" cy="326" r="12" fill="#193649"></circle><circle cx="236" cy="404" r="8" fill="#193649"></circle><circle cx="330" cy="404" r="8" fill="#193649"></circle>
+          <path d="M241 350L228 393M252 352L242 393M312 351L325 393M323 350L337 393" stroke-width="2"></path>
+        </g>
+        <g font-size="14" fill="#c8dce7"><path d="M195 154H89" stroke="#67b6b0" fill="none"></path><circle cx="195" cy="154" r="3" fill="#67b6b0"></circle><text x="25" y="129" fill="#92d4ca" font-size="18" font-weight="600">X1 上肢</text><text x="25" y="151" font-size="12">保留机构与驱动</text>
+          <path d="M340 330H412" stroke="#87b8ed" fill="none"></path><circle cx="340" cy="330" r="3" fill="#87b8ed"></circle><text x="414" y="312" fill="#b7d6ff" font-size="18" font-weight="600">自研下肢</text><text x="414" y="335" font-size="12">Encos 模组</text><text x="414" y="355" font-size="12">新并联踝关节</text>
+          <rect x="24" y="319" width="165" height="72" rx="4" fill="#263e4a" stroke="#9b6659"></rect><text x="38" y="346" fill="#f1ad98" font-size="14" font-weight="600">模型 / 策略尚未同步</text><text x="38" y="370" font-size="12">仍沿用旧 X1 资产</text><path d="M189 354L226 335" fill="none" stroke="#bd8474" stroke-dasharray="4 4"></path>
+          <text x="26" y="445" fill="#8faab9" font-size="10">结构示意 · 非真实 CAD / 接线图</text>
+        </g>
+      </svg>
+    </div>
+  </section>
+  <div class="wrap intro-strip">
+    <div class="intro-item"><svg class="intro-icon" viewBox="0 0 40 40" fill="none" aria-hidden="true"><path d="M7 11H33V29H7ZM13 6V11M27 6V11M13 29V34M27 29V34M2 17H7M33 17H38M2 24H7M33 24H38" stroke="currentColor" stroke-width="1.7"></path><path d="M14 17H26V23H14Z" stroke="currentColor" stroke-width="1.7"></path></svg><div><strong>硬件接入已有进展</strong><p>混合 EtherCAT 从站 + 新踝关节传动</p></div></div>
+    <div class="intro-item"><svg class="intro-icon" viewBox="0 0 40 40" fill="none" aria-hidden="true"><path d="M5 20H14L18 9L24 30L28 20H35" stroke="currentColor" stroke-width="1.7"></path><circle cx="20" cy="20" r="17" stroke="currentColor" stroke-width="1.2"></circle></svg><div><strong>优先修复驱动与反馈</strong><p>错误首帧 / 虚假使能 / IMU 来源失效</p></div></div>
+    <div class="intro-item"><svg class="intro-icon" viewBox="0 0 40 40" fill="none" aria-hidden="true"><path d="M7 9H31V32H7ZM12 5H35V28" stroke="currentColor" stroke-width="1.7"></path><path d="M12 17H26M12 23H23M12 28H20" stroke="currentColor" stroke-width="1.7"></path></svg><div><strong>新整机需要独立验证</strong><p>几何检查通过 ≠ 站立与行走验收通过</p></div></div>
+  </div>
+  <main class="wrap">
+    <div class="legend"><p>按控制链路阅读，先处理 P0，再开展站立与行走调试。</p><div class="legend-items"><span><i class="dot" style="background:var(--red)"></i>代码确认 / 离线复现</span><span><i class="dot" style="background:var(--amber)"></i>需实物核对</span><span><i class="dot" style="background:var(--teal)"></i>已有验证</span></div></div>
+
+    <section class="panel" id="startup" aria-labelledby="startup-heading">
+      <div class="panel-head"><div class="heading"><span class="section-no">01</span><div><h2 id="startup-heading">启动发送缺少安全边界</h2><p class="subtitle">风险发生在控制器接管之前。</p></div></div><span class="status red">P0 · 已复现</span></div>
+      <div class="panel-body">
+        <div class="segmented" role="group" aria-label="启动链路对比"><button type="button" id="startup-current" aria-pressed="true">当前代码</button><button type="button" id="startup-proposed" aria-pressed="false">建议链路</button></div>
+        <div class="scroll-hint">横向滑动查看完整链路 →</div>
+        <div class="diagram-scroll"><svg class="diagram" viewBox="0 0 1080 185" role="img" aria-labelledby="startup-svg-title"><title id="startup-svg-title">当前启动链路：注册后全零帧可发送，总线先启动，使能仅修改本地状态，失能后命令仍能覆盖。</title>
+          <path d="M226 82H280M490 82H544M754 82H808" class="wire"></path><path d="M273 77L280 82L273 87M537 77L544 82L537 87M801 77L808 82L801 87" class="wire"></path>
+          <rect x="4" y="33" width="222" height="98" rx="5" fill="#f0f5f7" stroke="#d6e2e8"></rect><rect x="280" y="33" width="210" height="98" rx="5" fill="#fcf0ec" stroke="#edc3bb" id="startup-box2"></rect><rect x="544" y="33" width="210" height="98" rx="5" fill="#fcf0ec" stroke="#edc3bb" id="startup-box3"></rect><rect x="808" y="33" width="268" height="98" rx="5" fill="#fcf0ec" stroke="#edc3bb" id="startup-box4"></rect>
+          <text x="20" y="18" class="tiny svg-muted">01 / REGISTER</text><text x="296" y="18" class="tiny svg-muted">02 / BUS</text><text x="560" y="18" class="tiny svg-muted">03 / ENABLE</text><text x="824" y="18" class="tiny svg-muted">04 / COMMAND</text>
+          <text x="22" y="68" class="label" id="startup-title1">注册 Encos 电机</text><text x="22" y="100" class="small svg-muted" id="startup-caption1">全零 data + dlc = 8</text><text x="299" y="68" class="label" id="startup-title2">先启动总线</text><text x="299" y="100" class="small svg-red" id="startup-caption2">立即循环发送错误首帧</text><text x="562" y="68" class="label" id="startup-title3">本地置为「使能」</text><text x="562" y="100" class="small svg-red" id="startup-caption3">无反馈也返回成功</text><text x="826" y="68" class="label" id="startup-title4">命令没有失能门控</text><text x="826" y="100" class="small svg-red" id="startup-caption4">后续力矩指令仍可覆盖</text>
+          <text x="4" y="165" class="small svg-red" id="startup-bottom">enable_actuator: false 只跳过使能流程，不能阻止上述首帧被发送。</text>
+        </svg></div>
+        <div class="signal-strip" aria-live="polite"><div><div class="label">MIT 数据字节</div><code id="frame-bytes">00 00 00 00 00 00 00 00</code></div><div><div class="label">按当前主站默认量程解码</div><strong class="red-text" id="frame-value">kp = 0 / kd = 0 / torque = −30</strong></div><div><div class="label">关键判断</div><strong id="frame-conclusion">全零字节 ≠ 零力矩</strong></div></div>
+        <p class="diagram-note" id="startup-note">建议方案为设计目标，尚未修改驱动代码。失能与零力矩也不等同于机械制动。</p>
+      </div>
+      <details class="evidence"><summary>代码证据 · 首帧 / 使能与失能（原发现 1、2）</summary><div class="evidence-content">
+        <div class="evidence-item"><span>01</span><div><strong>初始化数据可直接进入循环发送。</strong><p>SetDataFiled() 清零 8 字节 data，同时填写有效 ID 和 dlc=8；InitDcu() 先 Start()，后逐个 EnableActuator()。关闭 enable_actuator 也不会撤销已注册槽。</p><a class="source" href="../../src/module/dcu_driver_module/xyber_controller/xyber_api/src/encos_motor.cpp#L32">encos_motor.cpp:32 · SetDataFiled</a><a class="source" href="../../src/module/dcu_driver_module/src/dcu_driver_module.cc#L120">dcu_driver_module.cc:120 · 总线先启动</a></div></div>
+        <div class="evidence-item"><span>02</span><div><strong>使能结果来自本地变量，失能后仍接受 MIT 命令。</strong><p>实际编译 EncosMotor / EncosSlave：无总线、无反馈时 EnableActuator() 返回 true；DisableActuator() 后仍能写入非零力矩帧。</p><a class="source" href="../../src/module/dcu_driver_module/xyber_controller/xyber_api/src/encos_motor.cpp#L148">encos_motor.cpp:148 · RequestState</a><a class="source" href="../../src/module/dcu_driver_module/xyber_controller/xyber_api/src/encos_slave.cpp#L173">encos_slave.cpp:173 / 338 · EnableActuator / SetMitCmd</a></div></div>
+      </div></details>
+    </section>
+
+    <section class="panel" id="feedback" aria-labelledby="feedback-heading">
+      <div class="panel-head"><div class="heading"><span class="section-no">02</span><div><h2 id="feedback-heading">反馈看似正常，闭环实际缺失</h2><p class="subtitle">来源有效、数据新鲜，才能进入控制。</p></div></div><span class="status red">P0 / P1 · 已确认</span></div>
+      <div class="panel-body"><div class="scroll-hint">横向滑动查看两条反馈路径 →</div>
+        <div class="diagram-scroll"><svg class="diagram" viewBox="0 0 1080 285" role="img" aria-labelledby="feedback-title"><title id="feedback-title">IMU 来源 hip 不存在，返回零四元数；电机反馈缺少 ID、长度和新鲜度校验，缓存被重新打时间戳。</title>
+          <rect x="1" y="1" width="1078" height="122" rx="5" fill="#f0f5f7" stroke="#d6e2e8"></rect><rect x="1" y="144" width="1078" height="122" rx="5" fill="#f0f5f7" stroke="#d6e2e8"></rect>
+          <text x="20" y="29" class="small svg-muted">IMU 链路</text><text x="20" y="173" class="small svg-muted">电机反馈链路</text>
+          <rect x="160" y="30" width="203" height="65" rx="4" fill="white" stroke="#edc3bb"></rect><text x="180" y="57" class="label svg-red">hip 不存在</text><text x="180" y="80" class="tiny svg-muted">四个从站均未启用 IMU</text>
+          <path d="M369 63H432M654 63H723" class="bad-wire"></path><path d="M425 58L432 63L425 68M716 58L723 63L716 68" class="bad-wire"></path>
+          <rect x="437" y="30" width="217" height="65" rx="4" fill="white" stroke="#d6e2e8"></rect><text x="457" y="57" class="label">返回全零四元数</text><text x="457" y="80" class="tiny svg-mono svg-muted">quat = [0, 0, 0, 0]</text>
+          <rect x="729" y="30" width="327" height="65" rx="4" fill="#fcf0ec" stroke="#edc3bb"></rect><text x="750" y="57" class="label svg-red">仍发布并进入姿态观测</text><text x="750" y="80" class="tiny svg-muted">没有拒绝无效四元数</text>
+          <rect x="160" y="174" width="203" height="65" rx="4" fill="white" stroke="#edc3bb"></rect><text x="180" y="201" class="label svg-red">缺帧 / 错 ID / 短帧</text><text x="180" y="224" class="tiny svg-muted">反馈有效性检查不完整</text>
+          <path d="M369 207H432M654 207H723" class="bad-wire"></path><path d="M425 202L432 207L425 212M716 202L723 207L716 212" class="bad-wire"></path>
+          <rect x="437" y="174" width="217" height="65" rx="4" fill="white" stroke="#d6e2e8"></rect><text x="457" y="201" class="label">保留旧缓存</text><text x="457" y="224" class="tiny svg-muted">每毫秒重新填写当前时间</text>
+          <rect x="729" y="174" width="327" height="65" rx="4" fill="#fcf0ec" stroke="#edc3bb"></rect><text x="750" y="201" class="label svg-red">旧状态看起来像新反馈</text><text x="750" y="224" class="tiny svg-muted">控制器缺少反馈超时退出</text>
+        </svg></div>
+        <p class="diagram-note">EtherCAT 在 OP、ROS 话题持续发布，都不能单独证明每台电机与 IMU 的反馈有效。</p>
+      </div>
+      <details class="evidence"><summary>代码证据 · IMU 来源 / 缓存与新鲜度（原发现 3、9）</summary><div class="evidence-content">
+        <div class="evidence-item"><span>03</span><div><strong>imu_dcu_name 仍为 hip，实际拓扑已改为 body / waist / left_leg / right_leg。</strong><p>找不到该从站时返回 DcuImu()；发布线程继续填时间戳，RL 直接使用姿态数据。应核对真实 IMU、安装变换、有效性和时间戳。</p><a class="source" href="../../src/module/dcu_driver_module/cfg/dcu_x1.yaml#L2">dcu_x1.yaml:2 · IMU 来源</a><a class="source" href="../../src/module/dcu_driver_module/xyber_controller/xyber_api/src/xyber_controller.cpp#L194">xyber_controller.cpp:194 · 缺失来源返回零值</a><a class="source" href="../../src/module/control_module/src/rl_controller.cc#L164">rl_controller.cc:164 · 姿态观测</a></div></div>
+        <div class="evidence-item"><span>09</span><div><strong>单电机新鲜度和 /joint_cmd 超时没有贯通。</strong><p>dlc=0 时保留缓存；普通反馈未校验 ID，ack_status=1 未检查最低数据长度。控制线程停止后，总线仍可能持续重发最后一条命令。</p><a class="source" href="../../src/module/dcu_driver_module/xyber_controller/xyber_api/src/encos_motor.cpp#L63">encos_motor.cpp:63 · 反馈解析</a><a class="source" href="../../src/module/dcu_driver_module/src/dcu_driver_module.cc#L404">dcu_driver_module.cc:404 / 478 · 周期发布与时间戳</a><a class="source" href="../../src/module/dcu_driver_module/xyber_controller/xyber_api/src/ethercat_manager.cpp#L361">ethercat_manager.cpp:361 · 持续发送缓存</a></div></div>
+      </div></details>
+    </section>
+
+    <section class="panel" id="control" aria-labelledby="control-heading">
+      <div class="panel-head"><div class="heading"><span class="section-no">03</span><div><h2 id="control-heading">同一组参数，实际控制效果不同</h2><p class="subtitle">新机构改变增益映射，新模组改变可编码范围。</p></div></div><span class="status red">P1 · 已复现</span></div>
+      <div class="panel-body">
+        <div class="split">
+          <div class="subfigure"><div class="mini-title"><span>踝关节：关节增益直接传给电机</span><span class="chip">零位小信号</span></div>
+            <div class="bar-chart" role="img" aria-label="配置关节刚度为300，直接透传电机后，等效pitch约1614，roll约600；按代码力矩约定计算。">
+              <div class="bar-row"><span>配置 kp</span><div class="bar-track"><div class="bar-fill blue" style="--w:17.65%"></div></div><span class="bar-number">300</span></div>
+              <div class="bar-row"><span>等效 pitch</span><div class="bar-track"><div class="bar-fill" style="--w:94.93%"></div></div><span class="bar-number red-text">1614</span></div>
+              <div class="bar-row"><span>等效 roll</span><div class="bar-track"><div class="bar-fill" style="--w:35.29%"></div></div><span class="bar-number red-text">600</span></div>
+            </div><div class="gain-formula">K_joint ≈ Jᵀ · K_motor · J</div><p>zero / keep / stand 透传电机增益；RL 踝关节在关节空间算力矩。两条控制路径不等价。</p>
+          </div>
+          <div class="subfigure"><div class="mini-title"><span>膝关节：配置阻尼被截断</span><span class="chip">编码复现</span></div>
+            <div class="clamp-flow"><div class="clamp-box"><span>YAML 配置 kd</span><strong>10</strong></div><div class="arrow">→</div><div class="clamp-box"><span>按主站量程解码 kd</span><strong class="red-text">5</strong></div></div>
+            <p>当前主站按 0～5 裁剪和编码；这不等于电机只能支持 5。厂家手册支持查询、配置 KD 量程，实际固件与主站必须一致。</p><div class="gain-formula">先读回电机量程，再对齐编码与策略增益。</div>
+          </div>
+        </div>
+        <div class="range-strip"><div><strong>量程与反馈单位：仍需实物核对</strong><span>主站所有 Encos 共用 ±30；仓库规格中的 A8112 为 TOR ±90 / CUR ±60，且小模组出现 A4314 / A4315 型号冲突。</span></div><div class="range-scale" role="img" aria-label="主站力矩编码量程±30，仓库规格A8112力矩量程±90，实际电机配置待确认。"><div class="range-row"><span>主站 TOR</span><div class="range-track"><div class="range-fill red"></div></div><span>±30</span></div><div class="range-row"><span>规格 TOR</span><div class="range-track"><div class="range-fill" style="width:100%"></div></div><span>±90</span></div></div></div>
+        <div class="footnotes"><p>刚度数值由当前 C++ 几何计算，按代码力矩约定推导，不是实测刚度。</p><p>反馈电流直接记为 effort；电流 → 输出力矩的换算尚未落实。</p></div>
+      </div>
+      <details class="evidence"><summary>代码证据 · 型号量程 / 并联增益 / 阻尼截断（原发现 4、6、7）</summary><div class="evidence-content">
+        <div class="evidence-item"><span>04</span><div><strong>型号区分尚未落实为独立参数。</strong><p>A8112、A4314 共用默认 MitParam；MIT 反馈电流直接赋给 effort。仓库固件规格与代码的量程冲突需要核实，不能直接把文档值认定为实物设置。</p><a class="source" href="../../src/module/dcu_driver_module/xyber_controller/xyber_api/src/actuator_factory.cpp#L89">actuator_factory.cpp:89 · 共用实现与默认量程</a><a class="source" href="../../src/module/dcu_driver_module/xyber_controller/xyber_api/include/common_type.h#L125">common_type.h:125 · ENCOS_MIT_MODE_DEFAULT_PARAM</a><a class="source" href="../encos_slave_fw_impl_spec.zh_CN.md#L323">encos_slave_fw_impl_spec.zh_CN.md:323 / 450 · 量程对齐待办</a></div></div>
+        <div class="evidence-item"><span>06</span><div><strong>并联机构的 joint kp/kd 被原样分配给两台电机。</strong><p>零位 J=[1.64,−1; −1.64,−1]。两电机 kp=300 时，等效关节刚度约为 diag(1613.76,600)，并随姿态改变。应统一控制空间或重新设计电机空间增益。</p><a class="source" href="../../src/module/dcu_driver_module/src/ankle_transmission.cc#L225">ankle_transmission.cc:225 · 增益透传</a><a class="source" href="../../src/module/control_module/src/rl_controller.cc#L109">rl_controller.cc:109 · RL 踝关节力矩路径</a></div></div>
+        <div class="evidence-item"><span>07</span><div><strong>膝 kd=10 被主站截为 5；电机端量程尚未读回。</strong><p>实际编译 SetMitCmd() 后，kd=10 被编码为 9 位满量程 511；按主站的 0～5 量程解码为 5。电机实际解码值取决于其固件量程。2026-11-10 核对厂家《调试技术手册 V1.19EAP》：§9.2.5 支持 KD 量程配置并给出 0～50 示例；§9.3 支持用查询代码 24 读取当前 KD 范围。是否适用于本批模组需核对型号与固件，不能只修改主站 kd_max。</p><a class="source" href="../../src/module/control_module/cfg/rl_x1.yaml#L242">rl_x1.yaml:242 / 280 · 行走阻尼</a><a class="source" href="../../src/module/dcu_driver_module/xyber_controller/xyber_api/src/encos_motor.cpp#L296">encos_motor.cpp:296 · 参数裁剪</a><a class="source" href="https://cdn.flowntro.com/public/organizations/cmtsg4bcz0dxd01myp899wt9z/7dc80e89-be44-4942-bdc0-a67802e45fed-3035249.bin.pdf#page=37" target="_blank" rel="noopener noreferrer">厂家《调试技术手册 V1.19EAP》镜像 · 印刷页 32 / 38 · KD 量程配置与查询</a></div></div>
+      </div></details>
+    </section>
+
+    <section class="panel" id="model" aria-labelledby="model-heading">
+      <div class="panel-head"><div class="heading"><span class="section-no">04</span><div><h2 id="model-heading">硬件已变，模型与策略仍停在旧版本</h2><p class="subtitle">通信打通只覆盖最底层，整机动力学仍需同步。</p></div></div><span class="status red">P1 · 对比确认</span></div>
+      <div class="panel-body"><div class="scroll-hint">横向滑动查看硬件到策略的对应关系 →</div><div class="diagram-scroll"><svg class="diagram" viewBox="0 0 1080 270" role="img" aria-labelledby="model-title"><title id="model-title">本项目的硬件、驱动与踝关节几何已更新，但下肢MJCF与两份行走ONNX沿用旧X1；模型和策略与新硬件之间存在待验证缺口。</title>
+        <text x="17" y="24" class="small svg-muted">本项目</text><text x="17" y="210" class="small svg-muted">对比 F1</text>
+        <path d="M213 94H266M468 94H521" class="good-wire"></path><path d="M723 94H776" class="bad-wire"></path><path d="M770 88L776 94L770 100" class="bad-wire"></path>
+        <rect x="12" y="49" width="201" height="106" rx="5" fill="#edf3fc" stroke="#c9d9f1"></rect><text x="30" y="80" class="label svg-blue">自研下肢</text><text x="30" y="107" class="small">Encos 模组</text><text x="30" y="133" class="tiny svg-muted">硬件已更新</text>
+        <rect x="266" y="49" width="202" height="106" rx="5" fill="#e9f5f1" stroke="#c8e2d8"></rect><text x="284" y="80" class="label svg-teal">混合驱动</text><text x="284" y="107" class="small">DCU + Encos</text><text x="284" y="133" class="tiny svg-muted">通信适配已加入</text>
+        <rect x="521" y="49" width="202" height="106" rx="5" fill="#e9f5f1" stroke="#c8e2d8"></rect><text x="539" y="80" class="label svg-teal">新踝关节几何</text><text x="539" y="107" class="small">查表 / 逆解 / 雅可比</text><text x="539" y="133" class="tiny svg-muted">离线几何检查通过</text>
+        <rect x="776" y="49" width="291" height="106" rx="5" fill="#fcf0ec" stroke="#edc3bb"></rect><text x="796" y="80" class="label svg-red">整机模型 / 策略</text><text x="796" y="107" class="small">仍沿用旧 X1</text><text x="796" y="133" class="tiny svg-muted">新动力学与执行器约束尚未验证</text>
+        <path d="M921 156V181" class="bad-wire"></path><rect x="223" y="185" width="492" height="62" rx="4" fill="#f0f5f7" stroke="#d6e2e8"></rect><text x="241" y="211" class="small">左右腿 MJCF 子树完全相同</text><text x="241" y="232" class="tiny svg-muted">关节轴 / 尺寸 / 质量 / 惯量</text><rect x="744" y="185" width="323" height="62" rx="4" fill="#f0f5f7" stroke="#d6e2e8"></rect><text x="763" y="211" class="small">两份 ONNX 哈希完全相同</text><text x="763" y="232" class="tiny svg-muted">与 F1 的 archive 旧模型一致</text>
+      </svg></div><p class="diagram-note">新整机模型应覆盖连杆、质量惯量、关节定义与电机约束，再验证站姿和行走策略。</p></div>
+      <details class="evidence"><summary>对比证据 · 下肢 MJCF / ONNX 资产（原发现 5）</summary><div class="evidence-content">
+        <div class="evidence-item"><span>05</span><div><strong>策略文件逐字节相同，下肢 XML 结构和属性相同。</strong><p>rl_walk_leg.onnx SHA256：8dea61d996a3854004e7b1a1c255462276e4b07e2a56409729940efd2af05245。rl_walk_leg_shoulder.onnx SHA256：3c6c7ad7c6df29f0f92d655cc2459f9e159d86577bf04d1a3aa01c9ad76467f5。</p><a class="source" href="../../src/module/sim_module/model/mjcf/robot/xyber_x1/xyber_x1_serial.xml#L179">xyber_x1_serial.xml:179 · 左右下肢</a><a class="source" href="../../../F1/motion_control/module/control_module/policy/MANIFEST.md">对比基线：F1/motion_control/module/control_module/policy/MANIFEST.md · 历史模型台账</a><a class="source" href="../../src/module/control_module/cfg/rl_x1.yaml#L257">rl_x1.yaml:257 / 295 · 当前加载的策略</a></div></div>
+      </div></details>
+    </section>
+
+    <section class="panel" id="deployment" aria-labelledby="deployment-heading">
+      <div class="panel-head"><div class="heading"><span class="section-no">05</span><div><h2 id="deployment-heading">部署入口与保护条件尚未闭合</h2><p class="subtitle">通用保护可参考 F1，硬件参数必须按本机重新建立。</p></div></div><span class="status blue">P1 · 部署前处理</span></div>
+      <div class="panel-body"><div class="deployment-grid">
+        <div class="deployment-cell"><div class="small-cap">控制入口</div><strong>ControlModule<br>默认被注释</strong><div class="state"><i class="dot" style="background:var(--red)"></i>手柄 → 控制链路断开</div><p>驱动却默认使能执行器。</p></div>
+        <div class="deployment-cell"><div class="small-cap">关节与消息边界</div><strong>机械限位缺失<br>命令校验不完整</strong><div class="state"><i class="dot" style="background:var(--red)"></i>协议量程不能代替限位</div><p>长度 / 非有限值 / 超时需统一校验。</p></div>
+        <div class="deployment-cell"><div class="small-cap">实时运行条件</div><strong>FIFO 失败判断有误<br>控制线程未配置实时调度</strong><div class="state"><i class="dot" style="background:var(--red)"></i>1000 Hz 配置 ≠ 1 ms 保证</div><p>权限、绑核和推理线程需验证。</p></div>
+        <div class="deployment-cell"><div class="small-cap">保留机构的标定</div><strong>腰 pitch 方向<br>−1 → +1</strong><div class="state amber-text"><i class="dot" style="background:var(--amber)"></i>需结合实际装配确认</div><p>F1 的真机方向修正未保留。</p></div>
+      </div></div>
+      <details class="evidence"><summary>代码证据 · 限位 / 部署入口 / 腰部方向 / 实时调度（原发现 8、10、11、12）</summary><div class="evidence-content">
+        <div class="evidence-item"><span>08</span><div><strong>RL 目标未按机械限位约束，JointCommand 数组直接索引。</strong><p>actions_clip=100、action_scale=0.5，可产生约 ±50 rad 的目标增量；协议 ±12.5 rad 不能代替机械边界。回调缺少数组长度检查，串联路径也缺完整有限值检查。</p><a class="source" href="../../src/module/control_module/src/rl_controller.cc#L96">rl_controller.cc:96 · 目标输出</a><a class="source" href="../../src/module/dcu_driver_module/src/dcu_driver_module.cc#L553">dcu_driver_module.cc:553 · 消息索引</a><a class="source" href="../../../F1/motion_control/module/dcu_driver_module/src/dcu_driver_module.cc#L537">F1 对照：dcu_driver_module.cc:537 · 已有命令校验</a></div></div>
+        <div class="evidence-item"><span>10</span><div><strong>默认 run.sh 配置没有启用 ControlModule。</strong><p>配置只加载 JoyStickModule 和 DcuDriverModule；默认 enable_actuator=true。应区分明确的联调入口和整机运行入口。</p><a class="source" href="../../src/install/linux/bin/cfg/x1_cfg.yaml#L51">x1_cfg.yaml:51 · ControlModule 被注释</a></div></div>
+        <div class="evidence-item"><span>11</span><div><strong>腰部方向与 F1 的真机标定记录不同。</strong><p>F1 记录 +0.10 rad 测试后设置 direction_right=-1，本项目为 +1。如果机构与装配延续 F1，则命令和反馈均反向；本次未通过实物确认。</p><a class="source" href="../../src/module/dcu_driver_module/cfg/dcu_x1.yaml#L324">dcu_x1.yaml:324 · 当前方向 +1</a><a class="source" href="../../../F1/motion_control/module/dcu_driver_module/cfg/dcu_x1.yaml#L304">F1 对照：dcu_x1.yaml:304 · 真机标定记录</a></div></div>
+        <div class="evidence-item"><span>12</span><div><strong>pthread 返回值检查错误，实时权限与推理线程约束不完整。</strong><p>pthread_setschedparam() 用 &lt;0 判错会漏掉正错误码；WorkLoop 忽略设置结果。run.sh 只设置 cap_net_raw 并覆盖已有 capability；控制线程未配置实时调度，ONNX 仅限制 inter-op 线程。</p><a class="source" href="../../src/module/dcu_driver_module/xyber_controller/xyber_api/src/comm_utils.cpp#L53">comm_utils.cpp:53 · 错误判断</a><a class="source" href="../../src/install/linux/bin/run.sh#L11">run.sh:11 · capability 设置</a><a class="source" href="../../src/module/control_module/src/rl_controller.cc#L124">rl_controller.cc:124 · ONNX 线程配置</a></div></div>
+      </div></details>
+    </section>
+
+    <section class="roadmap" id="roadmap" aria-labelledby="roadmap-heading"><div class="roadmap-head"><h2 id="roadmap-heading">按依赖关系修复，再进入整机调试</h2><p>以下为建议顺序，不代表已完成。</p></div><div class="steps">
+      <div class="step"><div class="n">STEP 01 →</div><h3>封住驱动入口</h3><p>正确安全首帧<br>使能 / 失能门控<br>上电前完成输出初始化</p></div>
+      <div class="step"><div class="n">STEP 02 →</div><h3>对齐物理量与反馈</h3><p>模组型号、量程与单位<br>IMU 来源和坐标变换<br>方向、零点与踝关节 PD</p></div>
+      <div class="step"><div class="n">STEP 03 →</div><h3>建立保护与运行条件</h3><p>机械限位、消息校验<br>反馈 / 命令新鲜度<br>部署入口与实时调度</p></div>
+      <div class="step"><div class="n">STEP 04</div><h3>匹配新整机模型</h3><p>更新动力学与执行器约束<br>验证新站姿和策略<br>分阶段开展真机验收</p></div>
+    </div></section>
+    <aside class="validation"><div><h3>已有证据：新踝关节位置几何</h3><p><strong>117,992</strong> 个表节点：左右镜像约束与逆解回代通过。<br><strong>117,306</strong> 个网格中心：插值残差均小于配置阈值。</p></div><div><h3>本次验证边界</h3><p>已离线编译实际 Encos 驱动与运动学内核，复现首帧、使能与增益问题。<br>未执行 Linux 整工程构建、EtherCAT 联机、真实刚度测量或真机动作测试。</p></div></aside>
+  </main>
+  <footer class="footer"><div class="wrap"><div>对比基线：<code>F1_weilai 68b5951</code> / <code>F1 motion_control ecf3767</code> · 当前工作树</div><div>来源：本地部署代码审查 · 五组图解保留全部 12 项发现</div></div></footer>
+  <script>
+    const startupModes = {
+      current: {
+        titles: ["注册 Encos 电机", "先启动总线", "本地置为「使能」", "命令没有失能门控"],
+        captions: ["全零 data + dlc = 8", "立即循环发送错误首帧", "无反馈也返回成功", "后续力矩指令仍可覆盖"],
+        bottom: "enable_actuator: false 只跳过使能流程，不能阻止上述首帧被发送。",
+        bytes: "00 00 00 00 00 00 00 00", value: "kp = 0 / kd = 0 / torque = −30", conclusion: "全零字节 ≠ 零力矩",
+        title: "当前启动链路：注册后全零帧可发送，总线先启动，使能仅修改本地状态，失能后命令仍能覆盖。"
+      },
+      proposed: {
+        titles: ["注册时预置安全输出", "总线先收集有效反馈", "通过条件后准入", "失能时锁住安全输出"],
+        captions: ["运动命令默认关闭", "校验 ID / 长度 / 新鲜度", "显式授权 + 反馈与故障校验", "拒绝后续运动命令覆盖"],
+        bottom: "建议：将总线运行、反馈就绪与运动准入分开；失能时保持经过验证的安全输出。",
+        bytes: "00 00 00 7F FF 7F F7 FF", value: "kp = 0 / kd = 0 / torque ≈ 0", conclusion: "按真实量程编码安全帧",
+        title: "建议链路：注册时预置安全帧，总线收集有效反馈，通过条件后允许运动，失能时拒绝运动命令覆盖安全输出。"
+      }
+    };
+    function setStartupMode(mode) {
+      const data = startupModes[mode];
+      const proposed = mode === "proposed";
+      for (let i = 1; i <= 4; i++) {
+        document.getElementById("startup-title" + i).textContent = data.titles[i - 1];
+        const caption = document.getElementById("startup-caption" + i);
+        caption.textContent = data.captions[i - 1];
+        if (i > 1) caption.setAttribute("class", "small " + (proposed ? "svg-teal" : "svg-red"));
+      }
+      for (let i = 2; i <= 4; i++) {
+        const box = document.getElementById("startup-box" + i);
+        box.setAttribute("fill", proposed ? "#e9f5f1" : "#fcf0ec");
+        box.setAttribute("stroke", proposed ? "#c8e2d8" : "#edc3bb");
+      }
+      const bottom = document.getElementById("startup-bottom");
+      bottom.textContent = data.bottom;
+      bottom.setAttribute("class", "small " + (proposed ? "svg-teal" : "svg-red"));
+      document.getElementById("frame-bytes").textContent = data.bytes;
+      document.getElementById("frame-value").textContent = data.value;
+      document.getElementById("frame-value").className = proposed ? "teal-text" : "red-text";
+      document.getElementById("frame-conclusion").textContent = data.conclusion;
+      document.getElementById("startup-svg-title").textContent = data.title;
+      document.getElementById("startup-current").setAttribute("aria-pressed", String(!proposed));
+      document.getElementById("startup-proposed").setAttribute("aria-pressed", String(proposed));
+      document.getElementById("startup-note").textContent = proposed
+        ? "安全帧字节仅示例当前主站 ±30 对称量程；截断量化后力矩约 −0.0073。实际编码须对齐电机配置，零力矩不等同于机械制动。"
+        : "建议方案为设计目标，尚未修改驱动代码。失能与零力矩也不等同于机械制动。";
+    }
+    document.getElementById("startup-current").addEventListener("click", () => setStartupMode("current"));
+    document.getElementById("startup-proposed").addEventListener("click", () => setStartupMode("proposed"));
+    const evidencePanels = Array.from(document.querySelectorAll("details.evidence"));
+    const evidenceToggle = document.getElementById("evidence-toggle");
+    function updateEvidenceToggle() {
+      const allOpen = evidencePanels.every(panel => panel.open);
+      evidenceToggle.textContent = allOpen ? "收起证据" : "展开证据";
+      evidenceToggle.setAttribute("aria-expanded", String(allOpen));
+    }
+    evidenceToggle.addEventListener("click", () => {
+      const next = !evidencePanels.every(panel => panel.open);
+      evidencePanels.forEach(panel => { panel.open = next; });
+      updateEvidenceToggle();
+    });
+    evidencePanels.forEach(panel => panel.addEventListener("toggle", updateEvidenceToggle));
+    document.getElementById("print-button").addEventListener("click", () => window.print());
+  </script>
+</body>
+</html>

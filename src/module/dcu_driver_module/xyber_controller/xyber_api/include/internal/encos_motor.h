@@ -62,6 +62,7 @@ class EncosMotor : public xyber::Actuator {
 
   void UpdateFeedback();
   void WriteCurTorCmd(int16_t cur_tor, uint8_t ctrl_status, uint8_t ack_status);
+  void WriteMitCmd(float pos, float vel, float toq, float kp, float kd);
 
  private:
   uint8_t passage_ = 0;
@@ -71,6 +72,7 @@ class EncosMotor : public xyber::Actuator {
 
   xyber::ActautorMode mode_ = xyber::MODE_MIT;
   xyber::ActautorState power_state_ = xyber::STATE_DISABLE;
+  bool enable_pending_ = false;   // enable requested, completes on first valid per-motor feedback frame (review finding 02)
   uint8_t error_ = 0;
   float position_ = 0.0f;  // rad
   float velocity_ = 0.0f;  // rad/s
