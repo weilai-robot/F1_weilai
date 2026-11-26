@@ -249,8 +249,12 @@ void EncosMotor::SetEffort(float cur) {
 
 float EncosMotor::GetEffort() {
   UpdateFeedback();
-  // Feedback frames carry phase current (A). Report output torque (N·m) via
-  // the model's Kt; kt=0 (should not happen) falls back to raw amps.
+  // Feedback frames carry the motor's final output phase current (A): the MIT
+  // control law runs inside the driver, I = (KP·ΔP + KD·ΔV + Tff) / Kt
+  // (HW-SPEC-0005 §2.1, corrected 2026-11-26 — Kt divides the whole sum, not
+  // only Tff). ×Kt here therefore recovers the total output-equivalent torque
+  // (N·m), not just the feedforward part; kt=0 (should not happen) falls back
+  // to raw amps.
   if (mit_param_.kt > 0.0f) {
     return current_ * mit_param_.kt;
   }

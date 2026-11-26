@@ -76,7 +76,7 @@ class EncosMotor : public xyber::Actuator {
   uint8_t error_ = 0;
   float position_ = 0.0f;  // rad
   float velocity_ = 0.0f;  // rad/s
-  float current_ = 0.0f;   // phase current (A) from feedback frames; GetEffort() applies Kt
+  float current_ = 0.0f;   // final output phase current (A) from feedback frames (MIT law I=(KP·ΔP+KD·ΔV+Tff)/Kt, HW-SPEC-0005 §2.1); GetEffort() ×Kt -> total equivalent torque
   float temperature_ = 0.0f;
 };
 
