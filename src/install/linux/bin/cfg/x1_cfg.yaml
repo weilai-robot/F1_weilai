@@ -59,4 +59,4 @@ aimrt:
         cfg_file_path: ./cfg/control_module/rl_x1.yaml
       - name: DcuDriverModule
         log_lvl: DEBUG
-        cfg_file_path: ./cfg/dcu_driver_module/dcu_x1.yaml
+        cfg_file_path: ./cfg/dcu_driver_module/dcu_x1.yaml  # [真机F1通信验证] 完整 F1 配置（body DCU 带执行器 + encos 下肢）

@@ -5,3 +5,6 @@ _deps/
 build/
 cmake-build*/
 onnxruntime/
+
+# 仅本地保留: F1.5 预验证 IMU-only 配置
+src/module/dcu_driver_module/cfg/dcu_x1_imu_only.yaml

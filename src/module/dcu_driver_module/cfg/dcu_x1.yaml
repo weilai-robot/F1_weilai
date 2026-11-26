@@ -1,5 +1,5 @@
 publish_frequecy: 1000.0      # 数据发布频率
-imu_dcu_name: hip             # IMU数据来源，下肢DCU
+imu_dcu_name: body            # IMU数据来源，body DCU（hip DCU 已被 encos 从站替代不存在，IMU 走 body，链路已在 imu-only 分支预验证）
 enable_actuator: true         # 使能所有执行器
 actuator_debug: true         # 发布所有执行器的调试数据
 
@@ -78,8 +78,8 @@ actuator_list:  # 执行器列表
   - right_claw_actuator
 
 ethercat:
-  ifname: eno1          # 网卡名
-  bind_cpu: 9             # 绑定CPU核心
+  ifname: enp2s0         # 网卡名（X1 实时优化机，Intel igc 网卡）
+  bind_cpu: 4            # 绑定CPU核心（isolcpus=4,5,6,7 隔离核内）
   rt_priority: 90         # 线程优先级
   enable_dc: true         # 使能DC同步
   cycle_time_ns: 1000000  # 刷新周期1ms - 1khz
@@ -88,7 +88,7 @@ dcu_network:              # DCU通信网络，请根据实机连接情况配置
   - name: body            # DCU索引名字
     ecat_id: 1            # DCU在EtherCAT网络中的ID，从主站开始，第一个从站ID为1，依次增加
     enable: true          # 使能该DCU
-    imu_enable: false     # 不使用该DCU的IMU
+    imu_enable: true      # [真机F1通信验证] 使用 body DCU 的 IMU（hip DCU 不存在，/imu/data 全零问题修复）
     channel_1:            # DCU的CTRL-1通道配置
       - name: left_shoulder_pitch_actuator    # 执行器索引名字，不需要控制的执行器可直接注释掉
         type: POWER_FLOW_R86                  # 该执行器的类型

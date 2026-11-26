@@ -39,11 +39,13 @@ target_link_directories(
 find_package(std_msgs)
 find_package(sensor_msgs)
 find_package(geometry_msgs)
+find_package(Threads REQUIRED)
 target_link_libraries(
   ${CUR_TARGET_NAME}
   PRIVATE yaml-cpp::yaml-cpp
   PUBLIC aimrt::interface::aimrt_module_cpp_interface
          aimrt::interface::aimrt_module_ros2_interface
+         xyber_controller
          my_ros2_proto_aimrt_rpc_gencode
          my_ros2_proto::my_ros2_proto__rosidl_generator_cpp
          my_ros2_proto::my_ros2_proto__rosidl_typesupport_cpp
@@ -61,6 +63,7 @@ target_link_libraries(
          geometry_msgs::geometry_msgs__rosidl_typesupport_cpp
          geometry_msgs::geometry_msgs__rosidl_typesupport_fastrtps_cpp
          geometry_msgs::geometry_msgs__rosidl_typesupport_introspection_cpp
+         Threads::Threads
          onnxruntime
          ruckig)
 

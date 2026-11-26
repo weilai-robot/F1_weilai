@@ -1,12 +1,8 @@
 #!/bin/bash
-
+# run.sh — 薄 wrapper, 委托 run_main.sh（带真机通信验证配置 x1_cfg.yaml）
+# 原 FastDDS shm 清理/log 属主防御已并入 run_main.sh 开头；颈部/setcap/local_setup
+# 逻辑随 X1 实时优化机启动套件（run_main.sh + checks/）统一维护，只此一份。
+# 用法: bash run.sh [run_main.sh 的任意参数，如 --check-only]
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/ros2_setup.sh"
-
-# 防御：清掉之前可能由 root 跑残留的 FastDDS 共享内存段（否则 DDS 数据发不出）
-sudo rm -f /dev/shm/fastrtps_* 2>/dev/null
-# log 目录若被 root 占了，改回当前用户属主
-sudo chown -R "$(id -u):$(id -g)" "${SCRIPT_DIR}/log" 2>/dev/null
-
-sudo setcap cap_net_raw=ep ./aimrt_main
-./aimrt_main --cfg_file_path=./cfg/x1_cfg.yaml
+cd "${SCRIPT_DIR}"
+exec bash ./run_main.sh --cfg ./cfg/x1_cfg.yaml "$@"
